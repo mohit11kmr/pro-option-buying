@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Trading - Nifty Options Toolkit</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            gap: 15px;
+            padding: 15px;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header Navigation */
+        .header {
+            grid-column: 1 / -1;
+            padding: 15px;
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            color: #64DAFB;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-links a {
+            color: #e0e0e0;
+            text-decoration: none;
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .nav-links a:hover {
+            background: rgba(100, 150, 255, 0.3);
+            color: #64DAFB;
+        }
+
+        /* Left Sidebar - Position Summary */
+        .position-summary {
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            row-span: 2;
+        }
+
+        .summary-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(10, 20, 50, 0.7);
+            border-left: 3px solid #64DAFB;
+            border-radius: 4px;
+        }
+
+        .summary-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+
+        .summary-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #64DAFB;
+        }
+
+        .summary-value.positive {
+            color: #4CAF50;
+        }
+
+        .summary-value.negative {
+            color: #FF5252;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow: hidden;
+        }
+
+        /* Active Orders Table */
+        .orders-section {
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow: auto;
+            flex: 1;
+        }
+
+        .orders-section h2 {
+            font-size: 14px;
+            color: #64DAFB;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        th {
+            background: rgba(10, 20, 50, 0.7);
+            color: #64DAFB;
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.3);
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(100, 150, 255, 0.1);
+        }
+
+        tr:hover {
+            background: rgba(100, 150, 255, 0.1);
+        }
+
+        .price-up {
+            color: #4CAF50;
+        }
+
+        .price-down {
+            color: #FF5252;
+        }
+
+        .btn {
+            padding: 4px 8px;
+            font-size: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 2px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .btn-close {
+            background: #FF5252;
+            color: white;
+        }
+
+        .btn-close:hover {
+            background: #FF2D2D;
+        }
+
+        .btn-modify {
+            background: #FFC107;
+            color: #000;
+        }
+
+        .btn-modify:hover {
+            background: #FFD54F;
+        }
+
+        /* P&L Chart */
+        .chart-section {
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow: auto;
+            flex: 0.8;
+        }
+
+        .chart-section h2 {
+            font-size: 14px;
+            color: #64DAFB;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        /* Right Sidebar - Order Form */
+        .order-form {
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .order-form h2 {
+            font-size: 14px;
+            color: #64DAFB;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 10px;
+            color: #888;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            background: rgba(10, 20, 50, 0.7);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #64DAFB;
+            box-shadow: 0 0 10px rgba(100, 150, 255, 0.3);
+        }
+
+        .btn-execute {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .btn-execute:hover {
+            background: linear-gradient(135deg, #45a049, #3d8b40);
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+
+        .btn-execute:active {
+            transform: scale(0.98);
+        }
+
+        /* Notification Feed */
+        .notification-feed {
+            background: rgba(20, 30, 60, 0.9);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .notification-feed h3 {
+            font-size: 12px;
+            color: #64DAFB;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .notification {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid;
+            border-radius: 4px;
+            font-size: 11px;
+            background: rgba(10, 20, 50, 0.7);
+        }
+
+        .notification.success {
+            border-color: #4CAF50;
+            color: #4CAF50;
+        }
+
+        .notification.warning {
+            border-color: #FFC107;
+            color: #FFC107;
+        }
+
+        .notification.error {
+            border-color: #FF5252;
+            color: #FF5252;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(10, 20, 50, 0.3);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 150, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 150, 255, 0.5);
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-badge.open {
+            background: rgba(76, 175, 80, 0.3);
+            color: #4CAF50;
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 193, 7, 0.3);
+            color: #FFC107;
+        }
+
+        .status-badge.filled {
+            background: rgba(100, 150, 255, 0.3);
+            color: #64DAFB;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Live Trading Console</h1>
+        <div class="nav-links">
+            <a href="index.html">Dashboard</a>
+            <a href="ai-signal.html">Signals</a>
+            <a href="options-chain.html">Options</a>
+            <a href="trade-journal.html">Journal</a>
+            <a href="live-trading.html" style="color: #64DAFB;">Live Trading</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Left Sidebar: Position Summary -->
+        <div class="position-summary">
+            <div class="summary-item">
+                <div class="summary-label">Total Capital</div>
+                <div class="summary-value" id="total-capital">₹100,000</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Deployed Capital</div>
+                <div class="summary-value" id="deployed-capital">₹28,500</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Available Capital</div>
+                <div class="summary-value" id="available-capital">₹71,500</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Unrealized P&L</div>
+                <div class="summary-value positive" id="unrealized-pnl">+₹2,450</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Margin Usage</div>
+                <div class="summary-value" id="margin-usage">28.5%</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Max Drawdown</div>
+                <div class="summary-value" id="max-drawdown">-₹1,200</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Open Positions</div>
+                <div class="summary-value" id="open-positions">3</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Today's Trades</div>
+                <div class="summary-value" id="todays-trades">8</div>
+            </div>
+        </div>
+
+        <!-- Main Content: Orders -->
+        <div class="main-content">
+            <div class="orders-section">
+                <h2>📋 Active Orders</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Qty</th>
+                            <th>Entry</th>
+                            <th>Current</th>
+                            <th>SL</th>
+                            <th>Target</th>
+                            <th>P&L</th>
+                            <th>Return %</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-tbody">
+                        <tr>
+                            <td>NIFTY</td>
+                            <td>1</td>
+                            <td>24,800</td>
+                            <td class="price-up">24,950</td>
+                            <td>24,650</td>
+                            <td>25,100</td>
+                            <td class="price-up">+150</td>
+                            <td class="price-up">+0.60%</td>
+                            <td><span class="status-badge open">Open</span></td>
+                            <td>
+                                <button class="btn btn-modify">Modify</button>
+                                <button class="btn btn-close">Close</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>BANKNIFTY</td>
+                            <td>1</td>
+                            <td>59,800</td>
+                            <td class="price-down">59,650</td>
+                            <td>60,000</td>
+                            <td>59,200</td>
+                            <td class="price-down">-150</td>
+                            <td class="price-down">-0.25%</td>
+                            <td><span class="status-badge open">Open</span></td>
+                            <td>
+                                <button class="btn btn-modify">Modify</button>
+                                <button class="btn btn-close">Close</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- P&L Chart -->
+            <div class="chart-section">
+                <h2>📈 Live Equity Curve</h2>
+                <canvas id="equityChart" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- Right Sidebar: Order Form & Notifications -->
+        <div>
+            <div class="order-form">
+                <h2>✅ Execute Order</h2>
+
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <select id="symbol-select">
+                        <option value="NIFTY">NIFTY 50</option>
+                        <option value="BANKNIFTY">BANKNIFTY</option>
+                        <option value="FINNIFTY">FINNIFTY</option>
+                        <option value="MIDCPNIFTY">MIDCPNIFTY</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="qty-input" value="1" min="1">
+                </div>
+
+                <div class="form-group">
+                    <label>Entry Price</label>
+                    <input type="number" id="entry-input" value="24800" step="0.05">
+                </div>
+
+                <div class="form-group">
+                    <label>Stop Loss</label>
+                    <input type="number" id="sl-input" value="24650" step="0.05">
+                </div>
+
+                <div class="form-group">
+                    <label>Target</label>
+                    <input type="number" id="target-input" value="25100" step="0.05">
+                </div>
+
+                <div class="form-group">
+                    <label>Auto-Hedge %</label>
+                    <input type="number" id="hedge-input" value="0" min="0" max="100" step="5">
+                </div>
+
+                <div class="form-group">
+                    <label>Side</label>
+                    <select id="side-select">
+                        <option value="buy">Buy (Long)</option>
+                        <option value="sell">Sell (Short)</option>
+                    </select>
+                </div>
+
+                <button class="btn-execute" onclick="executeOrder()">🚀 Execute Order</button>
+
+                <div class="notification-feed">
+                    <h3>📢 Notifications</h3>
+                    <div id="notifications-container">
+                        <div class="notification success">✅ Connected</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Initialize Chart.js
+        const ctx = document.getElementById('equityChart').getContext('2d');
+        let equityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00'],
+                datasets: [{
+                    label: 'Equity Curve',
+                    data: [100000, 101200, 101800, 102500, 103200, 102800, 103500, 104200, 102450],
+                    borderColor: '#64DAFB',
+                    backgroundColor: 'rgba(100, 150, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#64DAFB',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1
+                }, {
+                    label: 'Max Drawdown',
+                    data: [100000, 99000, 98500, 98800, 99200, 98900, 99500, 100200, 98800],
+                    borderColor: '#FF5252',
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e0e0e0',
+                            font: { size: 11 }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#888', font: { size: 10 } },
+                        grid: { color: 'rgba(100, 150, 255, 0.1)' }
+                    },
+                    y: {
+                        ticks: { color: '#888', font: { size: 10 } },
+                        grid: { color: 'rgba(100, 150, 255, 0.1)' }
+                    }
+                }
+            }
+        });
+
+        // WebSocket Connection
+        const socket = io();
+
+        socket.on('connect', () => {
+            addNotification('✅ Connected to server', 'success');
+        });
+
+        socket.on('live_pnl', (data) => {
+            updatePnL(data);
+        });
+
+        socket.on('order_filled', (data) => {
+            addNotification(`✅ Order filled: ${data.symbol} @ ₹${data.price}`, 'success');
+            updateOrdersTable();
+        });
+
+        socket.on('target_hit', (data) => {
+            addNotification(`🎯 Target hit: ${data.symbol}`, 'success');
+        });
+
+        socket.on('stoploss_hit', (data) => {
+            addNotification(`❌ Stop-loss hit: ${data.symbol}`, 'error');
+        });
+
+        function addNotification(message, type = 'info') {
+            const container = document.getElementById('notifications-container');
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            container.insertBefore(notif, container.firstChild);
+
+            // Keep only last 5 notifications
+            while (container.children.length > 5) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function executeOrder() {
+            const symbol = document.getElementById('symbol-select').value;
+            const qty = parseInt(document.getElementById('qty-input').value);
+            const entry = parseFloat(document.getElementById('entry-input').value);
+            const sl = parseFloat(document.getElementById('sl-input').value);
+            const target = parseFloat(document.getElementById('target-input').value);
+            const hedge = parseFloat(document.getElementById('hedge-input').value);
+            const side = document.getElementById('side-select').value;
+
+            // Validate
+            if (!qty || !entry || !sl || !target) {
+                addNotification('❌ Please fill all required fields', 'error');
+                return;
+            }
+
+            // Send to backend
+            fetch('/api/trades/execute-live', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symbol, qty, entry_price: entry, stop_loss: sl,
+                    target_price: target, side, hedge_ratio: hedge / 100
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'open') {
+                        addNotification(`✅ Order ${data.order_id} executed @ ₹${data.execution_price}`, 'success');
+                        updateOrdersTable();
+                    } else {
+                        addNotification(`❌ Order failed: ${data.status}`, 'error');
+                    }
+                })
+                .catch(e => {
+                    addNotification(`❌ Error: ${e.message}`, 'error');
+                });
+        }
+
+        function updatePnL(data) {
+            document.getElementById('unrealized-pnl').textContent = `₹${data.total_pnl}`;
+            document.getElementById('unrealized-pnl').className = `summary-value ${data.total_pnl >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        function updateOrdersTable() {
+            fetch('/api/trades/live-status')
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('orders-tbody');
+                    tbody.innerHTML = '';
+                    data.forEach(order => {
+                        const row = tbody.insertRow();
+                        row.innerHTML = `
+                            <td>${order.symbol}</td>
+                            <td>${order.quantity}</td>
+                            <td>₹${order.entry_price}</td>
+                            <td class="${order.pnl >= 0 ? 'price-up' : 'price-down'}">₹${order.current_price || order.entry_price}</td>
+                            <td>₹${order.stop_loss}</td>
+                            <td>₹${order.target}</td>
+                            <td class="${order.pnl >= 0 ? 'price-up' : 'price-down'}">₹${order.pnl.toFixed(0)}</td>
+                            <td class="${order.pnl_pct >= 0 ? 'price-up' : 'price-down'}">${order.pnl_pct.toFixed(2)}%</td>
+                            <td><span class="status-badge open">${order.status}</span></td>
+                            <td>
+                                <button class="btn btn-modify" onclick="modifyOrder('${order.order_id}')">Modify</button>
+                                <button class="btn btn-close" onclick="closeOrder('${order.order_id}')">Close</button>
+                            </td>
+                        `;
+                    });
+                });
+        }
+
+        function closeOrder(orderId) {
+            if (confirm(`Close order ${orderId}?`)) {
+                fetch(`/api/trades/close-live/${orderId}`, { method: 'DELETE' })
+                    .then(r => r.json())
+                    .then(data => {
+                        addNotification(`✅ Order closed | P&L: ₹${data.final_pnl}`, 'success');
+                        updateOrdersTable();
+                    });
+            }
+        }
+
+        function modifyOrder(orderId) {
+            addNotification(`📝 Modify feature coming soon`, 'info');
+        }
+
+        // Auto-update every 500ms
+        setInterval(updateOrdersTable, 500);
+    </script>
+</body>
+</html>

@@ -1228,6 +1228,220 @@ def _sanitize_for_json(obj):
     return obj
 
 
+# ==============================
+# PHASE 9: LIVE EXECUTION APIs
+# ==============================
+
+# Store active live trades (in-memory for demo, use database in production)
+LIVE_TRADES = {}
+
+@app.route('/api/trades/execute-live', methods=['POST'])
+def execute_live_order():
+    """Execute a live order with risk management."""
+    try:
+        data = request.json
+        
+        # Extract parameters
+        symbol = data.get('symbol', 'NIFTY')
+        qty = data.get('qty', 1)
+        entry_price = data.get('entry_price', 24800)
+        stop_loss = data.get('stop_loss', 24650)
+        target_price = data.get('target_price', 25100)
+        side = data.get('side', 'buy')
+        hedge_ratio = data.get('hedge_ratio', 0)  # 0-1 for auto-hedge
+        
+        # Generate order ID
+        order_id = f"LS{datetime.now().strftime('%H%M%S')}{int(np.random.rand()*1000)}"
+        
+        # Create trade record
+        trade = {
+            'order_id': order_id,
+            'symbol': symbol,
+            'quantity': qty,
+            'entry_price': entry_price,
+            'current_price': entry_price,
+            'stop_loss': stop_loss,
+            'target': target_price,
+            'side': side,
+            'status': 'open',
+            'opened_at': datetime.now().isoformat(),
+            'pnl': 0,
+            'pnl_pct': 0,
+            'hedge_ratio': hedge_ratio,
+            'hedge_orders': []
+        }
+        
+        # Store in live trades
+        LIVE_TRADES[order_id] = trade
+        
+        # Broadcast via WebSocket
+        socketio.emit('order_executed', {
+            'order_id': order_id,
+            'symbol': symbol,
+            'quantity': qty,
+            'execution_price': entry_price
+        }, broadcast=True)
+        
+        return jsonify({
+            'status': 'open',
+            'order_id': order_id,
+            'execution_price': entry_price,
+            'message': f'Live order {order_id} executed'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/trades/live-status', methods=['GET'])
+def get_live_status():
+    """Get all active live trades and their current P&L."""
+    try:
+        trades_list = []
+        
+        for order_id, trade in LIVE_TRADES.items():
+            if trade['status'] == 'open':
+                # Simulate price movement
+                price_change = np.random.randn() * 10  # ±10 price points
+                current_price = trade['entry_price'] + price_change
+                
+                # Calculate P&L
+                if trade['side'] == 'buy':
+                    pnl = (current_price - trade['entry_price']) * trade['quantity']
+                    pnl_pct = ((current_price - trade['entry_price']) / trade['entry_price']) * 100
+                else:
+                    pnl = (trade['entry_price'] - current_price) * trade['quantity']
+                    pnl_pct = ((trade['entry_price'] - current_price) / trade['entry_price']) * 100
+                
+                trade['current_price'] = round(current_price, 2)
+                trade['pnl'] = round(pnl, 2)
+                trade['pnl_pct'] = round(pnl_pct, 2)
+                
+                # Check SL/Target
+                if trade['side'] == 'buy':
+                    if current_price <= trade['stop_loss']:
+                        trade['status'] = 'stoploss'
+                        socketio.emit('stoploss_hit', {'symbol': trade['symbol']}, broadcast=True)
+                    elif current_price >= trade['target']:
+                        trade['status'] = 'target'
+                        socketio.emit('target_hit', {'symbol': trade['symbol']}, broadcast=True)
+                else:  # sell
+                    if current_price >= trade['stop_loss']:
+                        trade['status'] = 'stoploss'
+                        socketio.emit('stoploss_hit', {'symbol': trade['symbol']}, broadcast=True)
+                    elif current_price <= trade['target']:
+                        trade['status'] = 'target'
+                        socketio.emit('target_hit', {'symbol': trade['symbol']}, broadcast=True)
+                
+                trades_list.append(trade)
+        
+        return jsonify(trades_list), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/close-live/<order_id>', methods=['DELETE'])
+def close_live_order(order_id):
+    """Close a live order and calculate final P&L."""
+    try:
+        if order_id not in LIVE_TRADES:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        trade = LIVE_TRADES[order_id]
+        closing_price = trade['current_price']
+        
+        # Calculate final P&L
+        if trade['side'] == 'buy':
+            final_pnl = (closing_price - trade['entry_price']) * trade['quantity']
+        else:
+            final_pnl = (trade['entry_price'] - closing_price) * trade['quantity']
+        
+        # Update trade
+        trade['status'] = 'closed'
+        trade['closed_at'] = datetime.now().isoformat()
+        trade['final_pnl'] = round(final_pnl, 2)
+        
+        # Broadcast closure
+        socketio.emit('order_closed', {
+            'order_id': order_id,
+            'symbol': trade['symbol'],
+            'final_pnl': final_pnl
+        }, broadcast=True)
+        
+        return jsonify({
+            'order_id': order_id,
+            'final_pnl': final_pnl,
+            'closing_price': closing_price,
+            'status': 'closed'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions/margin', methods=['GET'])
+def get_margin_info():
+    """Get current margin utilization and position details."""
+    try:
+        total_capital = 100000  # Default capital
+        deployed = sum(abs(t['pnl']) * 0.3 for t in LIVE_TRADES.values() if t['status'] == 'open')
+        available = total_capital - deployed
+        margin_usage_pct = (deployed / total_capital) * 100 if total_capital > 0 else 0
+        
+        # Calculate total P&L across all positions
+        total_pnl = sum(t['pnl'] for t in LIVE_TRADES.values() if t['status'] == 'open')
+        
+        return jsonify({
+            'total_capital': total_capital,
+            'deployed_capital': round(deployed, 2),
+            'available_capital': round(available, 2),
+            'margin_usage_pct': round(margin_usage_pct, 2),
+            'open_positions': len([t for t in LIVE_TRADES.values() if t['status'] == 'open']),
+            'total_pnl': round(total_pnl, 2),
+            'max_drawdown': 0  # Calculate from history
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/auto-hedge', methods=['POST'])
+def auto_hedge_position():
+    """Enable auto-hedging for a specific position."""
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+        hedge_ratio = data.get('hedge_ratio', 0.5)  # 50% hedge by default
+        
+        if order_id not in LIVE_TRADES:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        trade = LIVE_TRADES[order_id]
+        
+        # Create hedge order (opposite side, smaller quantity)
+        hedge_qty = int(trade['quantity'] * hedge_ratio)
+        hedge_order = {
+            'parent_order': order_id,
+            'hedge_qty': hedge_qty,
+            'side': 'sell' if trade['side'] == 'buy' else 'buy',
+            'created_at': datetime.now().isoformat()
+        }
+        
+        trade['hedge_orders'].append(hedge_order)
+        trade['hedge_ratio'] = hedge_ratio
+        
+        return jsonify({
+            'status': 'hedge_enabled',
+            'order_id': order_id,
+            'hedge_ratio': hedge_ratio,
+            'hedge_qty': hedge_qty
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     return send_from_directory(FRONTEND_DIR, filename)

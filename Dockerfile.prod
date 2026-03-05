@@ -1,0 +1,82 @@
+# Phase 13: Production Dockerfile
+# Multi-stage build for optimized container image
+# Author: Nifty Options Toolkit
+
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    libgomp1 \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies in a virtualenv
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+
+# ============================================================================
+# Stage 2: Runtime image (minimal, optimized for production)
+# ============================================================================
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies only (no build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    libopenblas0 \
+    liblapack3 \
+    libgfortran5 \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY . /app
+
+# Set environment variables
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    FLASK_ENV=production \
+    WORKERS=4
+
+# Create non-root user for security
+RUN useradd -m -u 1000 trading && chown -R trading:trading /app
+USER trading
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Expose port
+EXPOSE 5000
+
+# Run with gunicorn for production
+CMD ["gunicorn", \
+     "--bind", "0.0.0.0:5000", \
+     "--workers", "4", \
+     "--worker-class", "sync", \
+     "--worker-connections", "1000", \
+     "--timeout", "120", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "src.web.app:app"]

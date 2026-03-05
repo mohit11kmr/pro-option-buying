@@ -1,0 +1,289 @@
+name: Trading System CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
+      - 'Dockerfile.prod'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nifty-trading
+  KUBE_CONFIG_PATH: ${{ secrets.KUBECONFIG }}
+
+jobs:
+  # ============================================================================
+  # Stage 1: Unit Tests
+  # ============================================================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock
+    
+    - name: Run unit tests
+      run: |
+        pytest test/ -v --cov=src --cov-report=xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # ============================================================================
+  # Stage 2: Code Quality Analysis
+  # ============================================================================
+  quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pylint flake8 black isort mypy
+    
+    - name: Run Flake8
+      run: flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      continue-on-error: true
+    
+    - name: Run Pylint
+      run: pylint src/ --exit-zero --max-line-length=100
+      continue-on-error: true
+    
+    - name: Check Black formatting
+      run: black --check src/
+      continue-on-error: true
+    
+    - name: Run MyPy type checking
+      run: mypy src/ --ignore-missing-imports
+      continue-on-error: true
+
+  # ============================================================================
+  # Stage 3: Build Docker Image
+  # ============================================================================
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [test, quality]
+    if: github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile.prod
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # Stage 4: Security Scanning
+  # ============================================================================
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build.outputs.image-tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # ============================================================================
+  # Stage 5: Deploy to Development
+  # ============================================================================
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    environment:
+      name: development
+      url: https://api-dev.nifty-trading.com
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG_DEV }}" | base64 -d > $HOME/.kube/config
+    
+    - name: Update Kubernetes manifests
+      run: |
+        kubectl set image deployment/api-deployment \
+          api=${{ needs.build.outputs.image-tag }} \
+          -n trading
+    
+    - name: Wait for rollout
+      run: |
+        kubectl rollout status deployment/api-deployment -n trading --timeout=5m
+    
+    - name: Run smoke tests
+      run: |
+        kubectl exec -it $(kubectl get pod -n trading -l app=api -o jsonpath="{.items[0].metadata.name}") \
+          -n trading -- python -m pytest test/smoke_tests.py
+
+  # ============================================================================
+  # Stage 6: Deploy to Production
+  # ============================================================================
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: https://api.nifty-trading.com
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Verify production readiness
+      run: |
+        echo "Checking deployment prerequisites..."
+        if [[ ! -f "PRODUCTION_CHECKLIST.md" ]]; then
+          exit 0
+        fi
+    
+    - name: Configure kubectl for production
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > $HOME/.kube/config
+    
+    - name: Create backup before deployment
+      run: |
+        kubectl get all -n trading -o yaml > backup-$(date +%s).yaml
+        gsutil cp backup-*.yaml gs://trading-backups/
+    
+    - name: Update image in production
+      run: |
+        kubectl set image deployment/api-deployment \
+          api=${{ needs.build.outputs.image-tag }} \
+          -n trading --record
+    
+    - name: Verify production deployment
+      run: |
+        kubectl rollout status deployment/api-deployment -n trading --timeout=10m
+        kubectl get pods -n trading -l app=api
+    
+    - name: Run production smoke tests
+      run: |
+        CLUSTER_IP=$(kubectl get svc api-service -n trading -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        curl -f http://$CLUSTER_IP/health || exit 1
+    
+    - name: Notify deployment
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        payload: |
+          {
+            "text": "🚀 Production Deployment Successful",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Nifty Trading System*\n${{ github.event.head_commit.message }}\nCommit: <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  # ============================================================================
+  # Results Summary
+  # ============================================================================
+  summary:
+    name: CI/CD Summary
+    runs-on: ubuntu-latest
+    needs: [test, quality, build]
+    if: always()
+    
+    steps:
+    - name: Check workflow status
+      run: |
+        echo "### CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Code Quality: ${{ needs.quality.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Docker Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY

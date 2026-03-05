@@ -1,0 +1,437 @@
+---
+# Phase 13: Kubernetes Deployment Configuration
+# Author: Nifty Options Toolkit
+
+# ============================================================================
+# Namespace
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading
+  labels:
+    app: nifty-trading
+
+---
+# ============================================================================
+# ConfigMap: Application Configuration
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trading-config
+  namespace: trading
+data:
+  FLASK_ENV: "production"
+  LOG_LEVEL: "INFO"
+  CACHE_TYPE: "redis"
+  REDIS_URL: "redis://redis-service:6379/0"
+  DATABASE_URL: "postgresql://trading:trading@postgres-service:5432/trading"
+
+---
+# ============================================================================
+# Secret: Sensitive Credentials
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: trading-secrets
+  namespace: trading
+type: Opaque
+data:
+  # Base64 encoded values (replace with actual values)
+  TELEGRAM_BOT_TOKEN: VE9LRU5fUExBQ0VIT0xERVI=
+  DISCORD_BOT_TOKEN: VE9LRU5fUExBQ0VIT0xERVI=
+  API_KEY: QVBJX0tFWV9QTEFDRUhPTERFUg==
+  SECRET_KEY: U0VDUkVUX0tFWV9QTEFDRUhPTERFUg==
+
+---
+# ============================================================================
+# Service: Redis Cache
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: trading
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  clusterIP: None  # Headless service for StatefulSet
+
+---
+# ============================================================================
+# StatefulSet: Redis
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: trading
+spec:
+  serviceName: redis-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+      volumes:
+      - name: redis-storage
+        emptyDir: {}
+
+---
+# ============================================================================
+# Service: PostgreSQL Database
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: trading
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None
+
+---
+# ============================================================================
+# StatefulSet: PostgreSQL
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: trading
+spec:
+  serviceName: postgres-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: trading
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trading-secrets
+              key: DB_PASSWORD
+        - name: POSTGRES_DB
+          value: trading
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        emptyDir: {}
+
+---
+# ============================================================================
+# Service: Trading API
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: trading
+  labels:
+    app: api
+spec:
+  type: LoadBalancer
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 5000
+      protocol: TCP
+
+---
+# ============================================================================
+# Deployment: Trading API (Auto-scaling 2-10 pods)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+  namespace: trading
+spec:
+  replicas: 2  # Initial replicas
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - api
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: api
+        image: nifty-trading:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        
+        env:
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: FLASK_ENV
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: LOG_LEVEL
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: REDIS_URL
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: trading-secrets
+              key: API_KEY
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      
+      volumes:
+      - name: logs
+        emptyDir: {}
+
+---
+# ============================================================================
+# HorizontalPodAutoscaler: Auto-scale API pods
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: trading
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+
+---
+# ============================================================================
+# PodDisruptionBudget: High availability
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+
+---
+# ============================================================================
+# Ingress: API Gateway
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: trading
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.nifty-trading.com
+    secretName: api-tls-cert
+  rules:
+  - host: api.nifty-trading.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# ============================================================================
+# NetworkPolicy: Security isolation
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trading-network-policy
+  namespace: trading
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 5000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

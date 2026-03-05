@@ -7,37 +7,82 @@ venv/
 env/
 .env
 
-# Data and Logs
-*.log
-*.db
-*.csv
-*.xlsx
-*.json
-!smartapi-python/**/*.json
-active_paper_trades.json
-ai_signal_cache.json
-risk_state.json
-mcx_paper_trades.json
-test_result.json
-
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Project specific
-logs/
+# OS
+.DS_Store
+Thumbs.db
+
+# ========================================
+# ORGANIZED PROJECT STRUCTURE
+# ========================================
+
+# Data Directory (contains sensitive/trading data)
 data/
+!data/.gitkeep
+
+# Logs Directory (application logs)
+logs/
+!logs/.gitkeep
+
+# Models Directory (ML models - can be large)
 models/
-nifty_50_analysis/
-control_center.log
-server.log
-sentry_live.log
-nifty_live.csv
-nifty_paper_trades.csv
-backtest_comparison.csv
-backtest_results_20yr.csv
-nifty_20yr_data.csv
-nifty_historical_20yr.csv
-nifty_options_pnl_report.xlsx
+!models/.gitkeep
+
+# Config Directory (keep templates, ignore actual config)
+config/.env
+config/config.yaml
+!config/.env.example
+!config/example.env
+
+# Documentation (keep all docs)
+!docs/
+
+# Scripts (keep all scripts)
+!scripts/
+
+# ========================================
+# DEVELOPMENT & TESTING
+# ========================================
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ========================================
+# PRODUCTION & DEPLOYMENT
+# ========================================
+
+# Docker
+.dockerignore
+
+# Kubernetes secrets (if any)
+k8s/*secret*.yaml
+
+# ========================================
+# SENSITIVE DATA PATTERNS
+# ========================================
+
+# API Keys and secrets
+*API_KEY*
+*SECRET*
+*TOKEN*
+*PASSWORD*
+
+# Personal data
+*user*
+*email*
+
+# Financial data (be careful with these)
+*balance*
+*pnl*
+*profit*
