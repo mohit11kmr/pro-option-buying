@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty 50 Research Dashboard | ProTrading</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-main: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --blue: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+        }
+
+        body {
+            background: var(--bg-main);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+            color: var(--blue);
+        }
+
+        .nav-links a {
+            color: var(--text);
+            text-decoration: none;
+            margin-left: 20px;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            color: var(--blue);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .filter-group {
+            margin-bottom: 15px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #8b949e;
+        }
+
+        select,
+        input {
+            width: 100%;
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            background: var(--blue);
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .chart-container {
+            height: 400px;
+            position: relative;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-main);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .stat-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--blue);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #8b949e;
+        }
+
+        .pattern-tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #8b949e;
+            font-size: 13px;
+        }
+
+        .tab.active {
+            color: var(--blue);
+            border-bottom: 2px solid var(--blue);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px;
+            color: #8b949e;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .row-spike {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        .row-cons {
+            color: var(--yellow);
+            font-weight: 600;
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: var(--bg-card);
+            color: var(--text);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--blue);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+            }
+
+            to {
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toast-container"></div>
+
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div
+                class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <i class="fas fa-chart-line text-white text-sm" style="color: white; padding: 8px;"></i>
+            </div>
+            <h1>Nifty Research <span style="color: #8b5cf6;">Lab</span></h1>
+        </div>
+        <div class="nav-links" style="display: flex; align-items: center; gap: 5px;">
+            <a href="/"
+                style="padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #8b949e; text-decoration: none; transition: all 0.15s;"
+                onmouseover="this.style.background='#21262d';this.style.color='#fff'"
+                onmouseout="this.style.background='transparent';this.style.color='#8b949e'">
+                <i class="fas fa-home" style="margin-right: 5px;"></i>Dashboard
+            </a>
+            <a href="/options-strategy"
+                style="padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #8b949e; text-decoration: none; transition: all 0.15s;"
+                onmouseover="this.style.background='#21262d';this.style.color='#fff'"
+                onmouseout="this.style.background='transparent';this.style.color='#8b949e'">
+                <i class="fas fa-bolt" style="margin-right: 5px;"></i>Options Pro
+            </a>
+            <a href="/ai-signal"
+                style="padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #8b949e; text-decoration: none; transition: all 0.15s;"
+                onmouseover="this.style.background='#21262d';this.style.color='#fff'"
+                onmouseout="this.style.background='transparent';this.style.color='#8b949e'">
+                <i class="fas fa-robot" style="margin-right: 5px;"></i>AI Signal
+            </a>
+            <a href="/backtest"
+                style="padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #8b949e; text-decoration: none; transition: all 0.15s;"
+                onmouseover="this.style.background='#21262d';this.style.color='#fff'"
+                onmouseout="this.style.background='transparent';this.style.color='#8b949e'">
+                <i class="fas fa-history" style="margin-right: 5px;"></i>Backtest
+            </a>
+            <a href="/nifty-research"
+                style="padding: 5px 15px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; text-decoration: none; background: #1f6feb;">
+                <i class="fas fa-microscope" style="margin-right: 5px;"></i>Research Lab
+            </a>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Sidebar Filters -->
+        <div class="panel">
+            <h3><i class="fas fa-filter"></i> Analysis Parameters</h3>
+
+            <div class="filter-group">
+                <label>Research Scenario</label>
+                <select id="scenario" onchange="toggleScenarioFilters()">
+                    <option value="spikes">Price Spikes (Volatility)</option>
+                    <option value="gaps">Opening Gaps</option>
+                    <option value="breakouts">Consolidation Breakouts</option>
+                    <option value="mean_reversion">Mean Reversion (EMA)</option>
+                    <option value="vol_squeeze">Volatility Squeeze (BB)</option>
+                    <option value="rsi_reversal">RSI Reversal (OB/OS)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Timeframe</label>
+                <select id="timeframe">
+                    <option value="15m">15 Minutes</option>
+                    <option value="1h">1 Hour</option>
+                    <option value="1d">Daily</option>
+                </select>
+            </div>
+
+            <!-- Dynamic Filter Groups -->
+            <div id="filter-spikes" class="scenario-filter">
+                <div class="filter-group">
+                    <label>Spike Multiplier (ATR x)</label>
+                    <input type="number" id="spikeMult" value="2.5" step="0.1" min="1">
+                </div>
+            </div>
+
+            <div id="filter-consolidations" class="scenario-filter">
+                <div class="filter-group">
+                    <label>Consolidation Tightness (%)</label>
+                    <input type="number" id="consTight" value="0.2" step="0.05" min="0.05">
+                </div>
+                <div class="filter-group">
+                    <label>Min Bars for Zone</label>
+                    <input type="number" id="consBars" value="8" min="3">
+                </div>
+            </div>
+
+            <div id="filter-gaps" class="scenario-filter" style="display:none;">
+                <div class="filter-group">
+                    <label>Gap Threshold (%)</label>
+                    <input type="number" id="gapThreshold" value="0.5" step="0.1" min="0.1">
+                </div>
+            </div>
+
+            <div id="filter-ema" class="scenario-filter" style="display:none;">
+                <div class="filter-group">
+                    <label>EMA Period</label>
+                    <input type="number" id="emaPeriod" value="20" min="5">
+                </div>
+                <div class="filter-group">
+                    <label>EMA Threshold (%)</label>
+                    <input type="number" id="emaThreshold" value="1.0" step="0.1" min="0.1">
+                </div>
+            </div>
+
+            <button class="btn" onclick="runAnalysis()"><i class="fas fa-sync"></i> Update Analysis</button>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div id="primaryCount" class="stat-val">--</div>
+                    <div id="primaryLabel" class="stat-label">PATTERNS</div>
+                </div>
+                <div class="stat-card">
+                    <div id="secondaryCount" class="stat-val">--</div>
+                    <div id="secondaryLabel" class="stat-label">ZONES</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chart & Results -->
+        <div class="panel">
+            <div class="chart-container">
+                <canvas id="analysisChart"></canvas>
+            </div>
+
+            <div class="pattern-tabs">
+                <div id="tabPatterns" class="tab active" onclick="switchMainTab('patterns')">Detected Patterns</div>
+                <div id="tabCons" class="tab" onclick="switchMainTab('cons')">Consolidation History</div>
+            </div>
+
+            <div id="patternsTableContainer">
+                <table id="dynamicTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <div id="consTableContainer" style="display:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Duration</th>
+                            <th>Range %</th>
+                            <th>Breakout</th>
+                        </tr>
+                    </thead>
+                    <tbody id="consTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function toggleScenarioFilters() {
+            const scenario = document.getElementById('scenario').value;
+            document.querySelectorAll('.scenario-filter').forEach(el => el.style.display = 'none');
+
+            if (scenario === 'spikes') document.getElementById('filter-spikes').style.display = 'block';
+            if (scenario === 'breakouts') document.getElementById('filter-consolidations').style.display = 'block';
+            if (scenario === 'gaps') document.getElementById('filter-gaps').style.display = 'block';
+            if (scenario === 'mean_reversion') document.getElementById('filter-ema').style.display = 'block';
+
+            // Auto-trigger analysis when scenario changes
+            runAnalysis();
+        }
+
+        async function runAnalysis() {
+            const tf = document.getElementById('timeframe').value;
+            const scenario = document.getElementById('scenario').value;
+
+            let url = `/api/analysis/nifty?tf=${tf}&scenario=${scenario}`;
+            url += `&spike_mult=${document.getElementById('spikeMult').value}`;
+            url += `&cons_tightness=${document.getElementById('consTight').value}`;
+            url += `&cons_min_bars=${document.getElementById('consBars').value}`;
+            url += `&gap_threshold=${document.getElementById('gapThreshold').value}`;
+            url += `&ema_period=${document.getElementById('emaPeriod').value}`;
+            url += `&ema_threshold=${document.getElementById('emaThreshold').value}`;
+
+            showToast(`Analyzing ${scenario} on ${tf}...`);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.success) updateDashboard(data);
+                else showToast("Error: " + data.error);
+            } catch (e) {
+                showToast("Connection error");
+            }
+        }
+
+        function updateDashboard(data) {
+            const scenario = data.scenario;
+            const patterns = data.patterns;
+
+            // Update Stats
+            document.getElementById('primaryLabel').innerText = scenario.toUpperCase().replace('_', ' ');
+            document.getElementById('primaryCount').innerText = patterns[scenario] ? patterns[scenario].length : 0;
+            document.getElementById('secondaryCount').innerText = patterns.consolidations.length;
+            document.getElementById('secondaryLabel').innerText = "CONS. ZONES";
+
+            renderChart(data.chart_data, scenario);
+            renderDynamicTable(patterns[scenario], scenario);
+            renderConsTable(patterns.consolidations);
+        }
+
+        function renderChart(data, scenario) {
+            const ctx = document.getElementById('analysisChart').getContext('2d');
+            if (chart) chart.destroy();
+
+            const highlightPoints = data.times.map(t => data.highlights.includes(t) ? data.prices[data.times.indexOf(t)] : null);
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.times,
+                    datasets: [
+                        {
+                            label: 'Price',
+                            data: data.prices,
+                            borderColor: '#58a6ff',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'EMA',
+                            data: data.emas,
+                            borderColor: 'rgba(210, 153, 34, 0.4)',
+                            borderWidth: 1.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            hidden: scenario !== 'mean_reversion'
+                        },
+                        {
+                            label: 'Highlights',
+                            data: highlightPoints,
+                            backgroundColor: '#f85149',
+                            borderColor: '#f85149',
+                            pointRadius: 5,
+                            showLine: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', maxTicksLimit: 10 } },
+                        y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#c9d1d9' } }
+                    }
+                }
+            });
+        }
+
+        function renderDynamicTable(items, scenario) {
+            const head = document.getElementById('tableHead');
+            const body = document.getElementById('tableBody');
+            body.innerHTML = '';
+
+            if (scenario === 'spikes') {
+                head.innerHTML = `<tr><th>Time</th><th>Price</th><th>Range</th><th>Status</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => `<tr class="row-spike"><td>${i.time}</td><td>₹${i.Close.toLocaleString()}</td><td>${i.TR.toFixed(2)}</td><td>SPIKE</td></tr>`).join('');
+            } else if (scenario === 'gaps') {
+                head.innerHTML = `<tr><th>Time</th><th>Open</th><th>Prev Close</th><th>Gap %</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => `<tr style="color:var(--blue)"><td>${i.time}</td><td>₹${i.Open.toLocaleString()}</td><td>₹${i.PrevClose.toLocaleString()}</td><td>${i.Gap_Pct.toFixed(2)}%</td></tr>`).join('');
+            } else if (scenario === 'breakouts') {
+                head.innerHTML = `<tr><th>Time</th><th>Breakout Price</th><th>Direction</th><th>Zone Length</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => `<tr style="color:${i.direction === 'BULLISH' ? 'var(--green)' : (i.direction === 'BEARISH' ? 'var(--red)' : '#8b949e')}"><td>${i.time}</td><td>₹${i.close.toLocaleString()}</td><td>${i.direction}</td><td>${i.zone_duration} bars</td></tr>`).join('');
+            } else if (scenario === 'mean_reversion') {
+                head.innerHTML = `<tr><th>Time</th><th>Price</th><th>EMA</th><th>Distance %</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => `<tr style="color:var(--yellow)"><td>${i.time}</td><td>₹${i.Close.toLocaleString()}</td><td>₹${i.EMA.toFixed(2)}</td><td>${i.EMA_Dist.toFixed(2)}%</td></tr>`).join('');
+            } else if (scenario === 'vol_squeeze') {
+                head.innerHTML = `<tr><th>Time</th><th>Price</th><th>BB Width %</th><th>Status</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => `<tr style="color:var(--blue)"><td>${i.time}</td><td>₹${i.Close.toLocaleString()}</td><td>${i.BB_Width.toFixed(3)}%</td><td>SQUEEZE</td></tr>`).join('');
+            } else if (scenario === 'rsi_reversal') {
+                head.innerHTML = `<tr><th>Time</th><th>Price</th><th>RSI (14)</th><th>Signal</th></tr>`;
+                body.innerHTML = items?.reverse().map(i => {
+                    const signal = i.RSI > 70 ? 'OVERBOUGHT' : 'OVERSOLD';
+                    const color = i.RSI > 70 ? 'var(--red)' : 'var(--green)';
+                    return `<tr style="color:${color}"><td>${i.time}</td><td>₹${i.Close.toLocaleString()}</td><td>${i.RSI.toFixed(2)}</td><td>${signal}</td></tr>`;
+                }).join('');
+            }
+        }
+
+        function renderConsTable(cons) {
+            const body = document.getElementById('consTableBody');
+            body.innerHTML = cons.reverse().map(c => `
+                <tr class="row-cons">
+                    <td>${c.start}</td>
+                    <td>${c.end}</td>
+                    <td>${c.bars} bars</td>
+                    <td>${c.range_pct.toFixed(3)}%</td>
+                    <td style="color:${c.breakout === 'BULLISH' ? 'var(--green)' : (c.breakout === 'BEARISH' ? 'var(--red)' : '#8b949e')}">${c.breakout}</td>
+                </tr>
+            `).join('');
+        }
+
+        function switchMainTab(tab) {
+            document.getElementById('tabPatterns').classList.toggle('active', tab === 'patterns');
+            document.getElementById('tabCons').classList.toggle('active', tab === 'cons');
+            document.getElementById('patternsTableContainer').style.display = tab === 'patterns' ? 'block' : 'none';
+            document.getElementById('consTableContainer').style.display = tab === 'cons' ? 'block' : 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', toggleScenarioFilters);
+    </script>
+</body>
+
+</html>

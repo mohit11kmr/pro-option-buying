@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  nifty-options:
+    build: .
+    container_name: nifty-options
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=src/web/app.py
+      - FLASK_ENV=production
+      - SMARTAPI_KEY=${SMARTAPI_KEY}
+      - SMARTAPI_SECRET=${SMARTAPI_SECRET}
+      - DATABASE_URL=sqlite:///data/nifty_options.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - nifty-network
+
+  backtest-worker:
+    build: .
+    container_name: backtest-worker
+    command: python -m src.cli.main backtest --years 5
+    environment:
+      - DATABASE_URL=sqlite:///data/nifty_options.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+    restart: on-failure
+    networks:
+      - nifty-network
+
+networks:
+  nifty-network:
+    driver: bridge

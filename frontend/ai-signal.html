@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Signals - Nifty Options</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .pulse-green {
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+        }
+
+        .pulse-red {
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+
+        /* Visibility & Trust styles */
+        .logic-terminal {
+            background: #020617;
+            font-family: 'Courier New', Courier, monospace;
+            border: 1px solid #1e293b;
+        }
+
+        .heartbeat {
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+
+        @keyframes heartbeat {
+            0% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 1;
+                filter: drop-shadow(0 0 5px #8b5cf6);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 140px;
+            height: 70px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: #334155;
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+
+        .gauge-progress {
+            fill: none;
+            stroke: url(#gauge-gradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .conf-label {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: white;
+        }
+
+        /* Expert Panel Styles */
+        .expert-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .expert-card-buy {
+            border-color: rgba(34, 197, 94, 0.6);
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3), inset 0 0 20px rgba(34, 197, 94, 0.1);
+        }
+
+        .expert-card-sell {
+            border-color: rgba(239, 68, 68, 0.6);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3), inset 0 0 20px rgba(239, 68, 68, 0.1);
+        }
+
+        .expert-card-hold {
+            border-color: rgba(234, 179, 8, 0.6);
+            box-shadow: 0 0 20px rgba(234, 179, 8, 0.3), inset 0 0 20px rgba(234, 179, 8, 0.1);
+        }
+
+        .triple-lock-pulse {
+            animation: golden-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes golden-pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
+                border-color: rgba(234, 179, 8, 0.8);
+            }
+
+            50% {
+                box-shadow: 0 0 20px 10px rgba(234, 179, 8, 0);
+                border-color: rgba(234, 179, 8, 1);
+            }
+        }
+
+        .verdict-badge {
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .verdict-buy {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.4);
+        }
+
+        .verdict-sell {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .verdict-hold {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.4);
+        }
+
+        .consensus-triple {
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(217, 119, 6, 0.3));
+            border: 2px solid #eab308;
+            color: #fbbf24;
+        }
+
+        .consensus-split {
+            background: rgba(139, 92, 246, 0.2);
+            border: 2px solid #8b5cf6;
+            color: #a78bfa;
+        }
+
+        /* Risk Management Console Styles */
+        .risk-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .risk-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .circular-progress {
+            transform: rotate(-90deg);
+        }
+
+        .circular-progress-bg {
+            stroke: #334155;
+        }
+
+        .circular-progress-bar {
+            stroke: url(#circular-gradient);
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .risk-gradient-green {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3));
+        }
+
+        .risk-gradient-red {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.3));
+        }
+
+        .risk-gradient-yellow {
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(202, 138, 4, 0.3));
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <header class="glass sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+                    <i class="fas fa-chart-line text-white text-sm"></i>
+                </div>
+                <h1 class="text-lg font-bold text-white">Nifty Options <span class="text-purple-400">Toolkit</span></h1>
+            </div>
+            <nav class="flex items-center gap-1">
+                <a href="/"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-home mr-1.5"></i>Dashboard
+                </a>
+                <a href="/options-strategy"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-bolt mr-1.5"></i>Options Pro
+                </a>
+                <a href="/ai-signal"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium bg-purple-600 text-white flex items-center gap-2">
+                    <i class="fas fa-robot"></i>
+                    AI Signal
+                    <span class="w-1.5 h-1.5 rounded-full bg-purple-300 heartbeat"></span>
+                </a>
+                <a href="/backtest"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-history mr-1.5"></i>Backtest
+                </a>
+                <a href="/nifty-research"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-microscope mr-1.5 text-blue-400"></i>Research Lab
+                </a>
+            </nav>
+            <div class="flex items-center gap-3">
+                <div id="globalSentimentPanel" class="glass rounded-lg px-3 py-2 flex items-center gap-2 hidden">
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">Global Sentiment</p>
+                        <div class="flex items-center gap-2">
+                            <span id="globalSentimentEmoji" class="text-lg">🌍</span>
+                            <span id="globalSentimentText" class="text-sm font-bold text-white">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">GIFT Nifty</p>
+                        <div class="flex items-center gap-1">
+                            <span id="giftNiftyChange" class="text-xs font-bold">--</span>
+                            <span id="giftNiftyPct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">S&P 500</p>
+                        <div class="flex items-center gap-1">
+                            <span id="sp500Change" class="text-xs font-bold">--</span>
+                            <span id="sp500Pct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">Nasdaq</p>
+                        <div class="flex items-center gap-1">
+                            <span id="nasdaqChange" class="text-xs font-bold">--</span>
+                            <span id="nasdaqPct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end">
+                    <div class="flex items-center gap-2">
+                        <span id="connectionStatus" class="w-2 h-2 rounded-full bg-green-500 pulse-green"></span>
+                        <span class="text-sm text-gray-300 font-bold" id="livePriceHeader">₹0.00</span>
+                    </div>
+                    <span id="priceChangeOpen" class="text-[10px] font-medium text-gray-500">Wait for open...</span>
+                </div>
+                <button onclick="generateSignal()"
+                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-white text-sm font-medium transition">
+                    <i class="fas fa-sync-alt mr-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Current Signal -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="lg:col-span-2">
+                <div id="mainSignal" class="glass rounded-xl p-8 text-center">
+                    <p class="text-gray-400 text-lg mb-2">Current Signal</p>
+                    <h2 id="recommendation" class="text-5xl font-bold text-white mb-4">LOADING...</h2>
+                    <p id="signalDesc" class="text-gray-400">Generating AI signal...</p>
+                    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div class="bg-gray-800/40 rounded-lg p-4 border border-white/5">
+                            <p class="text-gray-400 text-xs uppercase mb-1">Buy/Sell Entry</p>
+                            <p id="entryPrice" class="text-2xl font-bold text-white">--</p>
+                        </div>
+                        <div class="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
+                            <p class="text-red-400 text-xs uppercase mb-1">Stop Loss (SL)</p>
+                            <p id="stopLoss" class="text-2xl font-bold text-red-400">--</p>
+                        </div>
+                        <div class="bg-green-500/10 rounded-lg p-4 border border-green-500/20">
+                            <p class="text-green-400 text-xs uppercase mb-1">Target (Exit)</p>
+                            <p id="targetPrice" class="text-2xl font-bold text-green-400">--</p>
+                        </div>
+                        <div class="bg-purple-500/10 rounded-lg p-4 border border-purple-500/20">
+                            <p class="text-purple-400 text-xs uppercase mb-1">Score</p>
+                            <p id="scoreValue" class="text-2xl font-bold text-white">--</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex justify-center gap-12">
+                        <div>
+                            <p class="text-gray-400 text-sm">Confidence</p>
+                            <div class="gauge-container mt-2">
+                                <svg viewBox="0 0 80 40">
+                                    <defs>
+                                        <linearGradient id="gauge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                            <stop offset="0%" style="stop-color:#ef4444" />
+                                            <stop offset="50%" style="stop-color:#eab308" />
+                                            <stop offset="100%" style="stop-color:#22c55e" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path class="gauge-bg" d="M 10 35 A 30 30 0 0 1 70 35" />
+                                    <path id="gaugeProgress" class="gauge-progress" d="M 10 35 A 30 30 0 0 1 70 35" />
+                                </svg>
+                                <div id="confidence" class="conf-label">--%</div>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-sm">Last Analysis</p>
+                            <p id="lastUpdate" class="text-2xl font-bold text-white mt-4">--</p>
+                            <p class="text-[10px] text-gray-500 mt-1 uppercase">Live Stream Active</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4"><i
+                            class="fas fa-bolt mr-2 text-yellow-400"></i>Quick Actions</h3>
+                    <div class="space-y-2">
+                        <button onclick="generateSignal()"
+                            class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition">
+                            <i class="fas fa-sync mr-2"></i>Refresh Signal
+                        </button>
+                        <button onclick="downloadDetailedLogs()"
+                            class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition">
+                            <i class="fas fa-file-csv mr-2"></i>Download Detailed Logs
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4"><i
+                            class="fas fa-history mr-2 text-blue-400"></i>Signal History</h3>
+                    <div id="signalHistory" class="space-y-2 max-h-48 overflow-y-auto">
+                        <p class="text-gray-400 text-sm">Loading history...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Analysis -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass rounded-xl p-6 text-center">
+                <div id="pricePredCircle"
+                    class="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center bg-gray-500/20">
+                    <i class="fas fa-chart-line text-2xl text-gray-400"></i>
+                </div>
+                <p class="text-gray-400 text-sm">Price Prediction</p>
+                <p id="pricePredScore" class="text-xl font-bold text-white mt-1">--</p>
+            </div>
+            <div class="glass rounded-xl p-6 text-center">
+                <div id="patternCircle"
+                    class="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center bg-gray-500/20">
+                    <i class="fas fa-shapes text-2xl text-gray-400"></i>
+                </div>
+                <p class="text-gray-400 text-sm">Pattern Recognition</p>
+                <p id="patternScore" class="text-xl font-bold text-white mt-1">--</p>
+            </div>
+            <div class="glass rounded-xl p-6 text-center">
+                <div id="sentimentCircle"
+                    class="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center bg-gray-500/20">
+                    <i class="fas fa-newspaper text-2xl text-gray-400"></i>
+                </div>
+                <p class="text-gray-400 text-sm">Market Sentiment</p>
+                <p id="sentimentScore" class="text-xl font-bold text-white mt-1">--</p>
+            </div>
+            <div class="glass rounded-xl p-6 text-center">
+                <div id="optionsCircle"
+                    class="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center bg-gray-500/20">
+                    <i class="fas fa-layer-group text-2xl text-gray-400"></i>
+                </div>
+                <p class="text-gray-400 text-sm">Options Flow</p>
+                <p id="optionsScore" class="text-xl font-bold text-white mt-1">--</p>
+            </div>
+        </div>
+
+        <!-- AI Expert Panel -->
+        <div class="glass rounded-xl p-6 mb-6">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                <i class="fas fa-users-gear text-purple-400"></i>
+                AI Expert Panel
+                <span class="text-xs font-normal text-gray-400 ml-2">Multi-Expert Voting System</span>
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Trend Expert -->
+                <div id="expert-trend" class="expert-card rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <i class="fas fa-chart-line text-blue-400 text-lg"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-white font-semibold">The Trend Expert</h4>
+                                <p class="text-xs text-gray-400">EMA & Momentum</p>
+                            </div>
+                        </div>
+                        <span id="trend-verdict" class="verdict-badge verdict-hold">HOLD</span>
+                    </div>
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Confidence</span>
+                            <span id="trend-confidence" class="text-white font-bold">0%</span>
+                        </div>
+                        <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="trend-confidence-bar" class="h-full bg-blue-500 transition-all duration-500"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <p id="trend-reason" class="text-sm text-gray-300">Awaiting analysis...</p>
+                </div>
+
+                <!-- Flow Expert -->
+                <div id="expert-flow" class="expert-card rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                                <i class="fas fa-layer-group text-yellow-400 text-lg"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-white font-semibold">The Flow Expert</h4>
+                                <p class="text-xs text-gray-400">OI & Volume Flow</p>
+                            </div>
+                        </div>
+                        <span id="flow-verdict" class="verdict-badge verdict-hold">HOLD</span>
+                    </div>
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Confidence</span>
+                            <span id="flow-confidence" class="text-white font-bold">0%</span>
+                        </div>
+                        <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="flow-confidence-bar" class="h-full bg-yellow-500 transition-all duration-500"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <p id="flow-reason" class="text-sm text-gray-300">Awaiting analysis...</p>
+                </div>
+
+                <!-- Sentiment Expert -->
+                <div id="expert-sentiment" class="expert-card rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                                <i class="fas fa-newspaper text-pink-400 text-lg"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-white font-semibold">The Sentiment Expert</h4>
+                                <p class="text-xs text-gray-400">News & Sentiment</p>
+                            </div>
+                        </div>
+                        <span id="sentiment-verdict" class="verdict-badge verdict-hold">HOLD</span>
+                    </div>
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Confidence</span>
+                            <span id="sentiment-confidence" class="text-white font-bold">0%</span>
+                        </div>
+                        <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="sentiment-confidence-bar" class="h-full bg-pink-500 transition-all duration-500"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <p id="sentiment-reason" class="text-sm text-gray-300">Awaiting analysis...</p>
+                </div>
+            </div>
+
+            <!-- Consensus Indicator -->
+            <div class="flex justify-center">
+                <div id="consensus-badge"
+                    class="consensus-split px-6 py-3 rounded-xl flex items-center gap-3 transition-all duration-500">
+                    <span id="consensus-icon" class="text-xl">⚡</span>
+                    <span id="consensus-text" class="font-bold text-sm">SPLIT VERDICT</span>
+                    <span id="consensus-detail" class="text-xs text-gray-400">(Experts Disagree)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk Management Console -->
+        <div class="glass rounded-xl p-6 mb-6">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                <i class="fas fa-shield-alt text-emerald-400"></i>
+                Risk Management Console
+                <span class="text-xs font-normal text-gray-400 ml-2">Position Sizing & Risk Analysis</span>
+            </h3>
+            <!-- Risk Management & Institutional Execution -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+                <!-- Execution Console -->
+                <div class="lg:col-span-1 glass rounded-xl p-6 border-indigo-500/30 bg-indigo-500/5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fas fa-terminal text-indigo-400"></i>
+                            Execution
+                        </h3>
+                        <span class="status-badge status-open">Paper Mode</span>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-[10px] text-gray-400 uppercase mb-1">Active Signal</p>
+                            <div id="executionSignal" class="text-lg font-bold text-gray-500 italic">No Signal</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-3 rounded-lg bg-black/20 border border-white/5">
+                                <p class="text-[10px] text-gray-500 uppercase">Entry</p>
+                                <p id="executionEntry" class="text-sm font-bold text-white mono">--</p>
+                            </div>
+                            <div class="p-3 rounded-lg bg-black/20 border border-white/5">
+                                <p id="executionLotsLabel" class="text-[10px] text-gray-500 uppercase">Lots</p>
+                                <p id="executionLots" class="text-sm font-bold text-white mono">1</p>
+                            </div>
+                        </div>
+
+                        <button id="btnExecute" onclick="executePaperTrade()" disabled
+                            class="w-full py-4 rounded-xl bg-gray-700 text-gray-500 font-bold uppercase tracking-wider transition-all duration-300 shadow-lg cursor-not-allowed">
+                            Awaiting Signal
+                        </button>
+
+                        <p class="text-[10px] text-gray-500 text-center italic">One-click execution logs to Journal</p>
+                    </div>
+                </div>
+
+                <!-- Position Sizer Card -->
+                <div class="lg:col-span-1 risk-card rounded-xl p-5">
+                    <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-calculator text-blue-400"></i>
+                        Position Sizer
+                    </h4>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-gray-400 uppercase">Capital (₹)</label>
+                            <input type="number" id="capitalInput" value="100000"
+                                class="w-full bg-gray-800/60 border border-gray-600 rounded-lg px-3 py-2 text-white font-bold focus:outline-none focus:border-blue-500 transition">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 uppercase">Risk Per Trade (%)</label>
+                            <input type="number" id="riskPercentInput" value="2" step="0.5"
+                                class="w-full bg-gray-800/60 border border-gray-600 rounded-lg px-3 py-2 text-white font-bold focus:outline-none focus:border-blue-500 transition">
+                        </div>
+                        <div class="pt-2 border-t border-gray-700">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-400">Max Risk:</span>
+                                <span id="maxRiskAmount" class="text-red-400 font-bold">₹2,000</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-400">Rec. Lots:</span>
+                                <span id="recommendedLots" class="text-white font-bold">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk:Reward Ratio Card -->
+                <div class="risk-card rounded-xl p-5">
+                    <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-balance-scale text-purple-400"></i>
+                        Risk:Reward
+                    </h4>
+                    <div class="text-center mb-4">
+                        <span id="rrRatio" class="text-5xl font-bold text-white">1:1.0</span>
+                    </div>
+                    <div class="h-3 bg-gray-700 rounded-full overflow-hidden flex">
+                        <div id="rrRiskBar" class="h-full bg-red-500 transition-all duration-500" style="width: 50%">
+                        </div>
+                        <div id="rrRewardBar" class="h-full bg-green-500 transition-all duration-500"
+                            style="width: 50%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs mt-2 text-gray-400">
+                        <span>Risk</span>
+                        <span>Reward</span>
+                    </div>
+                </div>
+
+                <!-- Daily PnL Tracker Card -->
+                <div class="risk-card rounded-xl p-5">
+                    <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-chart-line text-yellow-400"></i>
+                        Daily PnL
+                    </h4>
+                    <div class="text-center mb-3">
+                        <p class="text-xs text-gray-400 uppercase">Today PnL</p>
+                        <p id="dailyPnl" class="text-2xl font-bold text-white">₹0</p>
+                    </div>
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-400">Max Loss:</span>
+                            <span id="maxDailyLoss" class="text-red-400">₹5,000</span>
+                        </div>
+                        <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="dailyLossBar" class="h-full bg-red-500 transition-all duration-500"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="maxLossWarning"
+                        class="hidden text-center py-2 bg-red-900/50 rounded-lg border border-red-500/50">
+                        <p class="text-red-400 text-xs font-bold">⚠️ MAX LOSS HIT - STOP TRADING</p>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="recordTrade('win')"
+                            class="flex-1 px-2 py-1.5 bg-green-600/80 hover:bg-green-600 rounded text-xs text-white font-medium transition">
+                            <i class="fas fa-plus mr-1"></i>Win
+                        </button>
+                        <button onclick="recordTrade('loss')"
+                            class="flex-1 px-2 py-1.5 bg-red-600/80 hover:bg-red-600 rounded text-xs text-white font-medium transition">
+                            <i class="fas fa-minus mr-1"></i>Loss
+                        </button>
+                        <button onclick="resetDailyPnl()"
+                            class="px-2 py-1.5 bg-gray-600/80 hover:bg-gray-600 rounded text-xs text-white font-medium transition">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Capital Utilization Meter -->
+                <div class="risk-card rounded-xl p-5">
+                    <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-percentage text-cyan-400"></i>
+                        Capital at Risk
+                    </h4>
+                    <div class="relative w-28 h-28 mx-auto mb-3">
+                        <svg class="w-full h-full circular-progress" viewBox="0 0 100 100">
+                            <defs>
+                                <linearGradient id="circular-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#22c55e" />
+                                    <stop offset="50%" style="stop-color:#eab308" />
+                                    <stop offset="100%" style="stop-color:#ef4444" />
+                                </linearGradient>
+                            </defs>
+                            <circle class="circular-progress-bg" cx="50" cy="50" r="40" fill="none" stroke-width="10" />
+                            <circle id="capitalUtilizationCircle" class="circular-progress-bar" cx="50" cy="50" r="40"
+                                fill="none" stroke-width="10" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span id="capitalUtilizationPercent" class="text-2xl font-bold text-white">0%</span>
+                        </div>
+                    </div>
+                    <p id="capitalUtilizationLabel" class="text-center text-sm text-gray-400">No active position</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-Timeframe Analysis Grid -->
+        <div class="glass rounded-xl p-6 mb-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white flex items-center gap-3">
+                    <i class="fas fa-layer-group text-blue-400"></i>
+                    Multi-Timeframe Analysis
+                </h3>
+                <div id="alignment-score"
+                    class="px-4 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-sm font-bold text-gray-400">
+                    Alignment: <span id="alignment-value">--</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div id="mtf-5m"
+                    class="glass bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 text-center transition-all duration-500">
+                    <p class="text-xs text-gray-400 uppercase mb-2">5-Minute</p>
+                    <div class="tf-verdict text-lg font-bold py-1 rounded bg-gray-700/30 text-gray-500">NEUTRAL</div>
+                </div>
+                <div id="mtf-15m"
+                    class="glass bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 text-center transition-all duration-500">
+                    <p class="text-xs text-gray-400 uppercase mb-2">15-Minute</p>
+                    <div class="tf-verdict text-lg font-bold py-1 rounded bg-gray-700/30 text-gray-500">NEUTRAL</div>
+                </div>
+                <div id="mtf-1h"
+                    class="glass bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 text-center transition-all duration-500">
+                    <p class="text-xs text-gray-400 uppercase mb-2">1-Hour</p>
+                    <div class="tf-verdict text-lg font-bold py-1 rounded bg-gray-700/30 text-gray-500">NEUTRAL</div>
+                </div>
+                <div id="mtf-1d"
+                    class="glass bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 text-center transition-all duration-500">
+                    <p class="text-xs text-gray-400 uppercase mb-2">Daily</p>
+                    <div class="tf-verdict text-lg font-bold py-1 rounded bg-gray-700/30 text-gray-500">NEUTRAL</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reasons, Charts & Logic Stream -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i
+                        class="fas fa-list-check mr-2 text-green-400"></i>Signal Reasons</h3>
+                <ul id="reasons" class="space-y-3">
+                    <li class="text-gray-400"><i class="fas fa-circle-dot text-gray-500 mr-2"></i>Loading reasons...
+                    </li>
+                </ul>
+            </div>
+
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i
+                        class="fas fa-chart-area mr-2 text-blue-400"></i>Price Chart</h3>
+                <canvas id="priceChart" height="200"></canvas>
+            </div>
+
+            <div class="glass rounded-xl p-6 flex flex-col">
+                <h3 class="text-lg font-semibold text-white mb-4"><i
+                        class="fas fa-terminal mr-2 text-purple-400"></i>Live AI Reasoning</h3>
+                <div id="logicStream"
+                    class="logic-terminal rounded-lg p-3 flex-grow overflow-y-auto h-48 text-xs space-y-1">
+                    <p class="text-purple-400"># Initializing AI Log Broadcaster...</p>
+                    <p class="text-gray-500">Waiting for next market recalculation...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Sentiment & Futures -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i class="fas fa-poll mr-2 text-green-400"></i>Bullish
+                </h3>
+                <div class="text-center">
+                    <p id="bullishPercent" class="text-3xl font-bold text-green-400">--%</p>
+                    <div class="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div id="bullishBar" class="h-full bg-green-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i class="fas fa-poll mr-2 text-red-400"></i>Bearish
+                </h3>
+                <div class="text-center">
+                    <p id="bearishPercent" class="text-3xl font-bold text-red-400">--%</p>
+                    <div class="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div id="bearishBar" class="h-full bg-red-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i
+                        class="fas fa-arrow-up-right-dots mr-2 text-blue-400"></i>Nifty Future</h3>
+                <div class="text-center">
+                    <p id="futurePrice" class="text-3xl font-bold text-white">₹0.00</p>
+                    <p id="futureBasis" class="text-xs text-gray-400 mt-2 uppercase">Basis: --</p>
+                </div>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4"><i
+                        class="fas fa-gauge-high mr-2 text-yellow-400"></i>Mood</h3>
+                <div class="text-center flex flex-col items-center">
+                    <div id="moodIndicator" class="text-4xl mb-1">😐</div>
+                    <p id="moodText" class="text-sm font-bold text-white">Neutral</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Self-Learning Insights -->
+        <div class="glass rounded-xl p-6 mb-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-brain text-purple-400"></i> Self-Learning Insights
+                </h3>
+                <div class="flex items-center gap-4 text-sm">
+                    <span class="text-gray-400"><i class="fas fa-clock mr-1"></i> Next Retrain: <span id="nextRetrain"
+                            class="text-white">--:--</span></span>
+                    <span id="learningStatusBadge"
+                        class="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Active</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Accuracy Stats -->
+                <div class="space-y-4">
+                    <p class="text-gray-400 font-medium">Signal Accuracy (7D)</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white/5 rounded-lg p-3 border border-white/5">
+                            <p class="text-xs text-gray-400 uppercase">15m Horizon</p>
+                            <p id="acc15m" class="text-xl font-bold text-green-400">--%</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-3 border border-white/5">
+                            <p class="text-xs text-gray-400 uppercase">30m Horizon</p>
+                            <p id="acc30m" class="text-xl font-bold text-blue-400">--%</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-3 border border-white/5">
+                            <p class="text-xs text-gray-400 uppercase">60m Horizon</p>
+                            <p id="acc60m" class="text-xl font-bold text-purple-400">--%</p>
+                        </div>
+                        <div class="bg-white/5 rounded-lg p-3 border border-white/5">
+                            <p class="text-xs text-gray-400 uppercase">Snapshots</p>
+                            <p id="snapshotCount" class="text-xl font-bold text-white">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Adaptive Weights -->
+                <div class="md:col-span-2">
+                    <p class="text-gray-400 font-medium mb-4">Adaptive AI Weights (Dynamic Optimization)</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400 text-purple-300">Price</span>
+                                <span id="weightPriceVal" class="text-white">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="weightPriceBar" class="h-full bg-purple-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400 text-blue-300">Pattern</span>
+                                <span id="weightPatternVal" class="text-white">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="weightPatternBar" class="h-full bg-blue-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400 text-green-300">Sentiment</span>
+                                <span id="weightSentimentVal" class="text-white">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="weightSentimentBar" class="h-full bg-green-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400 text-yellow-300">Options</span>
+                                <span id="weightOptionsVal" class="text-white">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="weightOptionsBar" class="h-full bg-yellow-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let socket = null;
+        let priceChart = null;
+        let currentSignal = null;
+
+        async function connectWebSocket() {
+            socket = io();
+
+            // Listen for price updates
+            socket.on('price_update', function (data) {
+                if (data.nifty) {
+                    const nifty = data.nifty;
+                    document.getElementById('livePriceHeader').textContent = '₹' + nifty.toLocaleString();
+
+                    // Display change from open
+                    if (data.day_open_nifty) {
+                        const open = data.day_open_nifty;
+                        const change = nifty - open;
+                        const pct = (change / open) * 100;
+                        const sign = change >= 0 ? '+' : '';
+                        const colorClass = change >= 0 ? 'text-green-400' : 'text-red-400';
+
+                        document.getElementById('priceChangeOpen').textContent = `${sign}${change.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
+                        document.getElementById('priceChangeOpen').className = `text-[10px] font-bold ${colorClass}`;
+                    }
+
+                    // Display Future Price
+                    if (data.nifty_future) {
+                        document.getElementById('futurePrice').textContent = '₹' + data.nifty_future.toLocaleString();
+                        const basis = data.nifty_future - nifty;
+                        document.getElementById('futureBasis').textContent = `Basis: ${basis.toFixed(2)}`;
+                        document.getElementById('futureBasis').className = `text-[10px] font-bold ${basis >= 0 ? 'text-blue-400' : 'text-orange-400'} mt-2 uppercase`;
+                    }
+
+                    // Update Global Sentiment Panel
+                    if (data.global_sentiment) {
+                        updateGlobalSentimentPanel(data.global_sentiment);
+                    }
+                }
+            });
+
+            // Listen for Real-time AI Signals
+            socket.on('new_ai_signal', function (signal) {
+                console.log('📡 New Real-time Signal:', signal);
+                updateSignalUI(signal);
+
+                // Show prominent notification
+                const rec = signal.recommendation || 'HOLD';
+                const message = `🚨 AI SIGNAL: ${rec} (Score: ${signal.score})`;
+                showNotification(message, rec);
+
+                // Browser Desktop Notification
+                showDesktopNotification(rec, signal.verdict);
+            });
+
+            socket.on('connect', function () {
+                document.getElementById('connectionStatus').className = 'w-2 h-2 rounded-full bg-green-500 pulse-green';
+                console.log('✅ Connected to signal stream');
+            });
+
+            socket.on('global_market_update', function (data) {
+                if (data && data.sentiment) {
+                    updateGlobalSentimentPanel(data);
+                }
+            });
+
+            // Request Desktop Notification Permission
+            if ("Notification" in window) {
+                if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                    await Notification.requestPermission();
+                }
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            const labels = Array.from({ length: 30 }, (_, i) => 'Day ' + (i + 1));
+            const prices = Array.from({ length: 30 }, () => 24000 + Math.random() * 2000);
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'NIFTY',
+                        data: prices,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+
+        async function generateSignal() {
+            try {
+                const response = await fetch('/api/ai/signal');
+                const signal = await response.json();
+                updateSignalUI(signal);
+                showNotification('Signal Updated!', signal.recommendation);
+            } catch (e) {
+                console.error('Error:', e);
+            }
+        }
+
+        function updateSignalUI(signal) {
+            currentSignal = signal;
+            const rec = signal.recommendation || 'HOLD';
+
+            // Trigger Heartbeat Flash
+            const heartbeat = document.querySelector('.heartbeat');
+            heartbeat.classList.remove('bg-purple-300');
+            heartbeat.classList.add('bg-white', 'scale-150');
+            setTimeout(() => {
+                heartbeat.classList.remove('bg-white', 'scale-150');
+                heartbeat.classList.add('bg-purple-300');
+            }, 300);
+
+            document.getElementById('recommendation').textContent = rec;
+            document.getElementById('scoreValue').textContent = signal.score || 0;
+
+            // New Actionable Levels
+            document.getElementById('entryPrice').textContent = signal.entry_price || '--';
+            document.getElementById('stopLoss').textContent = signal.stop_loss || '--';
+            document.getElementById('targetPrice').textContent = signal.target || '--';
+
+            // Update Confidence Gauge
+            updateConfidenceGauge(signal.confidence || 0);
+
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+            // Update Logic Stream
+            if (signal.logic_steps) {
+                updateLogicStream(signal.logic_steps);
+            }
+
+            const signalEl = document.getElementById('mainSignal');
+            signalEl.className = 'glass rounded-xl p-8 text-center ';
+            if (rec.includes('BUY')) {
+                signalEl.className += 'signal-buy bg-green-900/30 border-green-500';
+                document.getElementById('signalDesc').textContent = 'Strong buy signal detected';
+            } else if (rec.includes('SELL')) {
+                signalEl.className += 'signal-sell bg-red-900/30 border-red-500';
+                document.getElementById('signalDesc').textContent = 'Strong sell signal detected';
+            } else {
+                signalEl.className += 'signal-hold bg-yellow-900/30 border-yellow-500';
+                document.getElementById('signalDesc').textContent = 'Hold - wait for better opportunity';
+            }
+
+            // Components
+            const comps = signal.components || {};
+            updateCircle('pricePredCircle', comps.price_prediction || 0, 'pricePredScore');
+            updateCircle('patternCircle', comps.pattern_recognition || 0, 'patternScore');
+            updateCircle('sentimentCircle', comps.sentiment || 0, 'sentimentScore');
+            updateCircle('optionsCircle', comps.options_flow || 0, 'optionsScore');
+
+            // Update Expert Panel
+            updateExpertPanel(signal);
+            updateRiskPanel(signal);
+            updateMTFGrid(signal.trends);
+
+            // Reasons
+            const reasons = signal.reasons || [];
+            document.getElementById('reasons').innerHTML = reasons.map(r =>
+                `<li class="text-gray-300"><i class="fas fa-check-circle text-green-400 mr-2"></i>${r}</li>`
+            ).join('');
+
+            // Sentiment
+            const bullish = Math.max(0, Math.min(100, 50 + (signal.score || 0) / 2));
+            document.getElementById('bullishPercent').textContent = bullish.toFixed(0) + '%';
+            document.getElementById('bullishBar').style.width = bullish + '%';
+            document.getElementById('bearishPercent').textContent = (100 - bullish).toFixed(0) + '%';
+            document.getElementById('bearishBar').style.width = (100 - bullish) + '%';
+
+            // Mood
+            const mood = signal.score || 0;
+            if (mood > 30) {
+                document.getElementById('moodIndicator').textContent = '🚀';
+                document.getElementById('moodText').textContent = 'Bullish';
+            } else if (mood < -30) {
+                document.getElementById('moodIndicator').textContent = '🐻';
+                document.getElementById('moodText').textContent = 'Bearish';
+            } else {
+                document.getElementById('moodIndicator').textContent = '😐';
+                document.getElementById('moodText').textContent = 'Neutral';
+            }
+
+            // History
+            addToHistory(signal);
+        }
+
+        function updateCircle(id, score, textId) {
+            const el = document.getElementById(id);
+            el.className = 'w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center ';
+            const textEl = document.getElementById(textId);
+
+            if (score > 0) {
+                el.className += 'bg-green-500/20 text-green-400';
+                textEl.textContent = '+' + score;
+            } else if (score < 0) {
+                el.className += 'bg-red-500/20 text-red-400';
+                textEl.textContent = score;
+            } else {
+                el.className += 'bg-gray-500/20 text-gray-400';
+                textEl.textContent = '0';
+            }
+        }
+
+        function updateExpertPanel(signal) {
+            const comps = signal.components || {};
+
+            const trendScore = (comps.price_prediction || 0) + (comps.pattern_recognition || 0);
+            const flowScore = comps.options_flow || 0;
+            const sentimentScore = comps.sentiment || 0;
+
+            const getVerdict = (score) => {
+                if (score > 1) return 'BUY';
+                if (score < -1) return 'SELL';
+                return 'HOLD';
+            };
+
+            const getConfidence = (score) => {
+                const absScore = Math.abs(score);
+                return Math.min(100, Math.max(20, absScore * 40));
+            };
+
+            const getReason = (score, type) => {
+                if (type === 'trend') {
+                    if (score > 1) return 'Strong EMA bullish crossover & momentum';
+                    if (score < -1) return 'Bearish EMA crossover pattern';
+                    return 'Mixed momentum signals';
+                } else if (type === 'flow') {
+                    if (score > 1) return 'Call options OI building significantly';
+                    if (score < -1) return 'Put options accumulation dominant';
+                    return 'Balanced options flow activity';
+                } else {
+                    if (score > 1) return 'Positive news sentiment & fund flows';
+                    if (score < -1) return 'Negative market sentiment prevailing';
+                    return 'Neutral news flow overall';
+                }
+            };
+
+            const trendVerdict = getVerdict(trendScore);
+            const flowVerdict = getVerdict(flowScore);
+            const sentimentVerdict = getVerdict(sentimentScore);
+
+            const trendConfidence = getConfidence(trendScore);
+            const flowConfidence = getConfidence(flowScore);
+            const sentimentConfidence = getConfidence(sentimentScore);
+
+            const updateExpertCard = (id, verdict, confidence, reason, verdictId, confId, confBarId, reasonId) => {
+                const card = document.getElementById(id);
+                const verdictEl = document.getElementById(verdictId);
+                const confEl = document.getElementById(confId);
+                const confBar = document.getElementById(confBarId);
+                const reasonEl = document.getElementById(reasonId);
+
+                card.className = 'expert-card rounded-xl p-5';
+                if (verdict === 'BUY') {
+                    card.classList.add('expert-card-buy');
+                    verdictEl.className = 'verdict-badge verdict-buy';
+                } else if (verdict === 'SELL') {
+                    card.classList.add('expert-card-sell');
+                    verdictEl.className = 'verdict-badge verdict-sell';
+                } else {
+                    card.classList.add('expert-card-hold');
+                    verdictEl.className = 'verdict-badge verdict-hold';
+                }
+
+                verdictEl.textContent = verdict;
+                confEl.textContent = confidence + '%';
+                confBar.style.width = confidence + '%';
+                reasonEl.textContent = reason;
+            };
+
+            updateExpertCard('expert-trend', trendVerdict, trendConfidence, getReason(trendScore, 'trend'), 'trend-verdict', 'trend-confidence', 'trend-confidence-bar', 'trend-reason');
+            updateExpertCard('expert-flow', flowVerdict, flowConfidence, getReason(flowScore, 'flow'), 'flow-verdict', 'flow-confidence', 'flow-confidence-bar', 'flow-reason');
+            updateExpertCard('expert-sentiment', sentimentVerdict, sentimentConfidence, getReason(sentimentScore, 'sentiment'), 'sentiment-verdict', 'sentiment-confidence', 'sentiment-confidence-bar', 'sentiment-reason');
+
+            const consensusBadge = document.getElementById('consensus-badge');
+            const consensusIcon = document.getElementById('consensus-icon');
+            const consensusText = document.getElementById('consensus-text');
+            const consensusDetail = document.getElementById('consensus-detail');
+
+            const allAgree = trendVerdict === flowVerdict && flowVerdict === sentimentVerdict;
+
+            if (allAgree) {
+                consensusBadge.className = 'consensus-triple px-6 py-3 rounded-xl flex items-center gap-3 transition-all duration-500 triple-lock-pulse';
+                consensusIcon.textContent = '🔒';
+                consensusText.textContent = 'TRIPLE LOCK';
+                consensusDetail.textContent = '(All Experts Agree: ' + trendVerdict + ')';
+            } else {
+                consensusBadge.className = 'consensus-split px-6 py-3 rounded-xl flex items-center gap-3 transition-all duration-500';
+                consensusIcon.textContent = '⚡';
+                consensusText.textContent = 'SPLIT VERDICT';
+                const verdicts = [trendVerdict, flowVerdict, sentimentVerdict];
+                const buyCount = verdicts.filter(v => v === 'BUY').length;
+                const sellCount = verdicts.filter(v => v === 'SELL').length;
+                if (buyCount > sellCount) {
+                    consensusDetail.textContent = '(' + buyCount + '/3 Experts Bullish)';
+                } else if (sellCount > buyCount) {
+                    consensusDetail.textContent = '(' + sellCount + '/3 Experts Bearish)';
+                } else {
+                    consensusDetail.textContent = '(Experts Disagree)';
+                }
+            }
+        }
+
+        // ===== RISK MANAGEMENT CONSOLE =====
+        let dailyPnlValue = parseFloat(localStorage.getItem('dailyPnl') || '0');
+        let savedCapital = localStorage.getItem('riskCapital');
+        let savedRiskPct = localStorage.getItem('riskPercent');
+
+        if (savedCapital) document.addEventListener('DOMContentLoaded', () => {
+            const ci = document.getElementById('capitalInput');
+            if (ci && savedCapital) ci.value = savedCapital;
+            const ri = document.getElementById('riskPercentInput');
+            if (ri && savedRiskPct) ri.value = savedRiskPct;
+            updateDailyPnlDisplay();
+        });
+
+        function updateRiskPanel(signal) {
+            const capital = parseFloat(document.getElementById('capitalInput')?.value || 100000);
+            const riskPct = parseFloat(document.getElementById('riskPercentInput')?.value || 2);
+            const maxRisk = capital * (riskPct / 100);
+
+            localStorage.setItem('riskCapital', capital);
+            localStorage.setItem('riskPercent', riskPct);
+
+            document.getElementById('maxRiskAmount').textContent = '₹' + maxRisk.toLocaleString();
+
+            const entry = signal.entry_price || signal.buy_sell_entry || 0;
+            const sl = signal.stop_loss || 0;
+            const target = signal.target_exit || 0;
+
+            // Position Sizer
+            const slDistance = Math.abs(entry - sl);
+            if (slDistance > 0 && entry > 0) {
+                const riskPerLot = slDistance * 25; // NIFTY lot size = 25
+                const lots = Math.floor(maxRisk / riskPerLot);
+                document.getElementById('recommendedLots').textContent = lots > 0 ? lots + ' lot' + (lots > 1 ? 's' : '') : '0';
+            } else {
+                document.getElementById('recommendedLots').textContent = '--';
+            }
+
+            // Risk:Reward Ratio
+            if (slDistance > 0 && entry > 0 && target > 0) {
+                const reward = Math.abs(target - entry);
+                const rr = reward / slDistance;
+                const rrEl = document.getElementById('rrRatio');
+                rrEl.textContent = '1:' + rr.toFixed(1);
+
+                if (rr >= 2) {
+                    rrEl.className = 'text-5xl font-bold text-green-400';
+                } else if (rr >= 1) {
+                    rrEl.className = 'text-5xl font-bold text-yellow-400';
+                } else {
+                    rrEl.className = 'text-5xl font-bold text-red-400';
+                }
+
+                const total = slDistance + reward;
+                const riskWidth = (slDistance / total) * 100;
+                const rewardWidth = (reward / total) * 100;
+                document.getElementById('rrRiskBar').style.width = riskWidth + '%';
+                document.getElementById('rrRewardBar').style.width = rewardWidth + '%';
+            }
+
+            // Capital Utilization
+            if (entry > 0) {
+                const recLots = parseInt(document.getElementById('recommendedLots').textContent) || 1;
+                const exposure = recLots * 25 * entry;
+                const utilPct = Math.min(100, (exposure / capital) * 100);
+                const circle = document.getElementById('capitalUtilizationCircle');
+                const circumference = 251.2;
+                circle.style.strokeDashoffset = circumference - (circumference * utilPct / 100);
+
+                if (utilPct < 30) {
+                    circle.style.stroke = '#22c55e';
+                } else if (utilPct < 60) {
+                    circle.style.stroke = '#eab308';
+                } else {
+                    circle.style.stroke = '#ef4444';
+                }
+
+                document.getElementById('capitalUtilizationPercent').textContent = utilPct.toFixed(0) + '%';
+                document.getElementById('capitalUtilizationLabel').textContent =
+                    utilPct < 30 ? 'Safe exposure' : utilPct < 60 ? 'Moderate exposure' : 'High exposure!';
+
+                // Update Execution Console
+                const exeBtn = document.getElementById('btnExecute');
+                const exeSignal = document.getElementById('executionSignal');
+                const exeEntry = document.getElementById('executionEntry');
+                const exeLots = document.getElementById('executionLots');
+
+                exeLots.textContent = recLots;
+                exeEntry.textContent = '₹' + entry.toLocaleString();
+                exeSignal.textContent = signal.recommendation;
+
+                if (signal.recommendation.includes('BUY')) {
+                    exeSignal.className = 'text-lg font-bold text-green-400';
+                    exeBtn.className = 'w-full py-4 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-green-500/20';
+                    exeBtn.disabled = false;
+                    exeBtn.textContent = 'Execute Buy';
+                } else if (signal.recommendation.includes('SELL')) {
+                    exeSignal.className = 'text-lg font-bold text-red-400';
+                    exeBtn.className = 'w-full py-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-red-500/20';
+                    exeBtn.disabled = false;
+                    exeBtn.textContent = 'Execute Sell';
+                } else {
+                    exeSignal.className = 'text-lg font-bold text-gray-500';
+                    exeBtn.className = 'w-full py-4 rounded-xl bg-gray-700 text-gray-500 font-bold uppercase tracking-wider transition-all duration-300 shadow-lg cursor-not-allowed';
+                    exeBtn.disabled = true;
+                    exeBtn.textContent = 'Hold - No Trade';
+                }
+            }
+        }
+
+        async function executePaperTrade() {
+            if (!currentSignal) return;
+
+            const btn = document.getElementById('btnExecute');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Executing...';
+
+            const payload = {
+                symbol: 'NIFTY',
+                price: currentSignal.entry_price || 0,
+                lots: parseInt(document.getElementById('executionLots').textContent) || 1,
+                strike: currentSignal.recommendation?.includes('BUY') ? (Math.round((currentSignal.entry_price || 0) / 50) * 50) : null,
+                type: currentSignal.recommendation?.includes('BUY') ? 'CE' : (currentSignal.recommendation?.includes('SELL') ? 'PE' : null),
+                sl: currentSignal.stop_loss,
+                tp: currentSignal.target,
+                reason: 'AI Signal: ' + currentSignal.recommendation
+            };
+
+            try {
+                const res = await fetch('/api/trades/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showToast('Trade Executed Successfully!', 'success');
+                    btn.textContent = 'Done!';
+                    btn.className = 'w-full py-4 rounded-xl bg-indigo-600 text-white font-bold uppercase tracking-wider transition-all duration-300';
+                    setTimeout(() => {
+                        updateRiskPanel(currentSignal); // Reset button state
+                    }, 3000);
+                } else {
+                    showToast('Execution Failed: ' + result.error, 'error');
+                    btn.textContent = 'Failed';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                showToast('Network Error during execution', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        function recordTrade(type) {
+            const capital = parseFloat(document.getElementById('capitalInput')?.value || 100000);
+            const riskPct = parseFloat(document.getElementById('riskPercentInput')?.value || 2);
+            const maxRisk = capital * (riskPct / 100);
+
+            if (type === 'win') {
+                dailyPnlValue += maxRisk * 1.5; // Assume 1.5R win
+            } else {
+                dailyPnlValue -= maxRisk; // 1R loss
+            }
+            localStorage.setItem('dailyPnl', dailyPnlValue);
+            updateDailyPnlDisplay();
+        }
+
+        function resetDailyPnl() {
+            dailyPnlValue = 0;
+            localStorage.setItem('dailyPnl', '0');
+            updateDailyPnlDisplay();
+        }
+
+        function updateDailyPnlDisplay() {
+            const pnlEl = document.getElementById('dailyPnl');
+            const sign = dailyPnlValue >= 0 ? '+' : '';
+            pnlEl.textContent = sign + '₹' + Math.abs(dailyPnlValue).toLocaleString(undefined, { maximumFractionDigits: 0 });
+            pnlEl.className = 'text-2xl font-bold ' + (dailyPnlValue >= 0 ? 'text-green-400' : 'text-red-400');
+
+            const maxLoss = 5000;
+            const lossUsed = Math.min(Math.abs(Math.min(dailyPnlValue, 0)), maxLoss);
+            const lossPct = (lossUsed / maxLoss) * 100;
+            document.getElementById('dailyLossBar').style.width = lossPct + '%';
+
+            const warningEl = document.getElementById('maxLossWarning');
+            if (dailyPnlValue <= -maxLoss) {
+                warningEl.classList.remove('hidden');
+            } else {
+                warningEl.classList.add('hidden');
+            }
+        }
+
+        // Input listeners for real-time recalculation
+        document.addEventListener('DOMContentLoaded', () => {
+            const capitalInput = document.getElementById('capitalInput');
+            const riskInput = document.getElementById('riskPercentInput');
+            if (capitalInput) capitalInput.addEventListener('input', () => { if (currentSignal) updateRiskPanel(currentSignal); });
+            if (riskInput) riskInput.addEventListener('input', () => { if (currentSignal) updateRiskPanel(currentSignal); });
+        });
+
+        function updateMTFGrid(trends) {
+            if (!trends) return;
+
+            let alignmentPoints = 0;
+            const tfs = ['5m', '15m', '1h', '1d'];
+
+            tfs.forEach(tf => {
+                const el = document.getElementById('mtf-' + tf);
+                if (!el) return;
+
+                const verdictEl = el.querySelector('.tf-verdict');
+                const trend = trends[tf] || 'NEUTRAL';
+                verdictEl.textContent = trend;
+
+                el.className = 'glass bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 text-center transition-all duration-500';
+                verdictEl.className = 'tf-verdict text-lg font-bold py-1 rounded bg-gray-700/30';
+
+                if (trend === 'BULLISH' || trend === 'STRONG_BULLISH') {
+                    el.classList.add('border-green-500/30', 'bg-green-500/5');
+                    verdictEl.classList.add('text-green-400');
+                    alignmentPoints += 1;
+                } else if (trend === 'BEARISH' || trend === 'STRONG_BEARISH') {
+                    el.classList.add('border-red-500/30', 'bg-red-500/5');
+                    verdictEl.classList.add('text-red-400');
+                    alignmentPoints -= 1;
+                } else {
+                    verdictEl.classList.add('text-gray-500');
+                }
+            });
+
+            const alignmentScore = Math.min(100, Math.round((Math.abs(alignmentPoints) / tfs.length) * 100));
+            const alignmentValEl = document.getElementById('alignment-value');
+            if (alignmentValEl) alignmentValEl.textContent = alignmentScore + '%';
+
+            const alignmentEl = document.getElementById('alignment-score');
+            if (alignmentEl) {
+                if (alignmentScore >= 75) {
+                    alignmentEl.className = 'px-4 py-1.5 rounded-full bg-green-900/30 border border-green-500/50 text-sm font-bold text-green-400';
+                } else if (alignmentScore >= 50) {
+                    alignmentEl.className = 'px-4 py-1.5 rounded-full bg-yellow-900/30 border border-yellow-500/50 text-sm font-bold text-yellow-400';
+                } else {
+                    alignmentEl.className = 'px-4 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-sm font-bold text-gray-400';
+                }
+            }
+        }
+
+        function updateConfidenceGauge(conf) {
+            const el = document.getElementById('confidence');
+            const progress = document.getElementById('gaugeProgress');
+
+            el.textContent = conf + '%';
+
+            // SVG dasharray logic: 188.5 is full semicircle
+            // 0% confidence = 188.5 offset
+            // 100% confidence = 0 offset
+            const offset = 188.5 - (188.5 * (conf / 100));
+            progress.style.strokeDashoffset = offset;
+
+            // Color logic
+            if (conf >= 80) el.className = 'conf-label text-green-400';
+            else if (conf >= 50) el.className = 'conf-label text-yellow-400';
+            else el.className = 'conf-label text-red-400';
+        }
+
+        function updateLogicStream(steps) {
+            const container = document.getElementById('logicStream');
+            container.innerHTML = ''; // Reset for new calculation
+
+            let delay = 0;
+            steps.forEach((step, i) => {
+                setTimeout(() => {
+                    const p = document.createElement('p');
+                    if (step.includes('✅')) p.className = 'text-green-400';
+                    else if (step.includes('⚠️')) p.className = 'text-yellow-500';
+                    else if (step.includes('🚀')) p.className = 'text-white font-bold border-t border-white/10 pt-1 mt-1';
+                    else p.className = 'text-purple-300';
+
+                    p.innerHTML = `<span class="text-gray-600 mr-2">[${new Date().toLocaleTimeString([], { hour12: false })}]</span> ${step}`;
+                    container.appendChild(p);
+                    container.scrollTop = container.scrollHeight;
+                }, delay);
+                delay += 400; // Typewriter/Thinking effect
+            });
+        }
+
+        function addToHistory(signal) {
+            const history = document.getElementById('signalHistory');
+            const rec = signal.recommendation || 'HOLD';
+            const color = rec.includes('BUY') ? 'text-green-400' : rec.includes('SELL') ? 'text-red-400' : 'text-yellow-400';
+
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center p-2 bg-gray-800/50 rounded';
+            item.innerHTML = `
+                <span class="${color} font-bold">${rec}</span>
+                <span class="text-gray-400 text-sm">Score: ${signal.score || 0}</span>
+                <span class="text-gray-500 text-xs">${new Date().toLocaleTimeString()}</span>
+            `;
+            history.insertBefore(item, history.firstChild);
+
+            if (history.children.length > 10) {
+                history.removeChild(history.lastChild);
+            }
+        }
+
+        function showNotification(message, type = 'HOLD') {
+            const notif = document.createElement('div');
+
+            // Clean up old notifications of same type if they exist
+            const oldNotifs = document.querySelectorAll('.signal-toast');
+            oldNotifs.forEach(n => n.remove());
+
+            const isBuy = type.includes('BUY');
+            const isSell = type.includes('SELL');
+            const bgColor = isBuy ? 'bg-green-600' : isSell ? 'bg-red-600' : 'bg-yellow-600';
+
+            notif.className = `fixed top-24 right-4 z-[100] p-5 rounded-xl shadow-2xl ${bgColor} text-white font-bold flex items-center gap-4 animate-bounce signal-toast border-2 border-white/20 min-w-[300px]`;
+            notif.style.backdropFilter = 'blur(10px)';
+
+            notif.innerHTML = `
+                <div class="bg-white/20 p-2 rounded-lg">
+                    <i class="fas ${isBuy ? 'fa-rocket' : isSell ? 'fa-arrow-trend-down' : 'fa-robot'} text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-xs uppercase opacity-80 mb-0.5">Nifty AI Alert</p>
+                    <p class="text-lg">${message}</p>
+                </div>
+            `;
+
+            document.body.appendChild(notif);
+
+            playAlertSound(type);
+            setTimeout(() => {
+                notif.classList.remove('animate-bounce');
+                notif.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => notif.remove(), 500);
+            }, 5000);
+        }
+
+        function showDesktopNotification(type, verdict) {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+            const isBuy = type.includes('BUY');
+            const icon = isBuy ? '📈' : '📉';
+
+            new Notification(`Nifty AI: ${type} ${icon}`, {
+                body: verdict || "New AI signal generated. Check dashboard for details.",
+                icon: "/static/favicon.ico" // Optional: update if you have one
+            });
+        }
+
+        function updateGlobalSentimentPanel(data) {
+            const panel = document.getElementById('globalSentimentPanel');
+            if (!data || !data.sentiment) return;
+
+            panel.classList.remove('hidden');
+
+            const sentiment = data.sentiment;
+            document.getElementById('globalSentimentEmoji').textContent = sentiment.emoji || '🌍';
+            document.getElementById('globalSentimentText').textContent = sentiment.sentiment || 'NEUTRAL';
+
+            const sentimentText = document.getElementById('globalSentimentText');
+            if (sentiment.sentiment === 'BULLISH') {
+                sentimentText.className = 'text-sm font-bold text-green-400';
+            } else if (sentiment.sentiment === 'BEARISH') {
+                sentimentText.className = 'text-sm font-bold text-red-400';
+            } else {
+                sentimentText.className = 'text-sm font-bold text-yellow-400';
+            }
+
+            const gift = data.gift_nifty || {};
+            const giftChange = gift.change || 0;
+            const giftPct = gift.change_pct || 0;
+            const giftSign = giftChange >= 0 ? '+' : '';
+            document.getElementById('giftNiftyChange').textContent = `${giftSign}${giftChange.toFixed(2)}`;
+            document.getElementById('giftNiftyChange').className = `text-xs font-bold ${giftChange >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('giftNiftyPct').textContent = `(${giftSign}${giftPct.toFixed(2)}%)`;
+
+            const usFutures = data.us_futures || {};
+            const sp500 = usFutures.sp500 || {};
+            const spChange = sp500.change_pct || 0;
+            const spSign = spChange >= 0 ? '+' : '';
+            document.getElementById('sp500Change').textContent = `${spSign}${spChange.toFixed(2)}%`;
+            document.getElementById('sp500Change').className = `text-xs font-bold ${spChange >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('sp500Pct').textContent = sp500.price ? `$${sp500.price.toLocaleString()}` : '--';
+
+            const nasdaq = usFutures.nasdaq || {};
+            const ndChange = nasdaq.change_pct || 0;
+            const ndSign = ndChange >= 0 ? '+' : '';
+            document.getElementById('nasdaqChange').textContent = `${ndSign}${ndChange.toFixed(2)}%`;
+            document.getElementById('nasdaqChange').className = `text-xs font-bold ${ndChange >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('nasdaqPct').textContent = nasdaq.price ? `$${nasdaq.price.toLocaleString()}` : '--';
+        }
+
+        function playAlertSound(type) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = type === 'BUY' ? 800 : type === 'SELL' ? 400 : 600;
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.2;
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } catch (e) { }
+        }
+
+        function downloadDetailedLogs() {
+            window.location.href = '/api/learning/export-signals?limit=5000';
+        }
+
+        function exportSignal() {
+            if (!currentSignal) return;
+            const report = JSON.stringify(currentSignal, null, 2);
+            const blob = new Blob([report], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ai_signal_' + new Date().toISOString() + '.json';
+            a.click();
+        }
+
+        async function updateLearningStats() {
+            try {
+                // 1. Fetch Status and Weights
+                const statusRes = await fetch('/api/learning/status');
+                const status = await statusRes.json();
+
+                if (status.is_running) {
+                    document.getElementById('learningStatusBadge').textContent = 'Learning Active';
+                    document.getElementById('learningStatusBadge').className = 'px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30';
+                }
+
+                document.getElementById('nextRetrain').textContent = status.next_retrain || '--:--';
+                document.getElementById('snapshotCount').textContent = status.snapshots_collected || 0;
+
+                // Update Weights
+                const weights = status.current_weights || {};
+                const updateWeight = (id, val) => {
+                    const pct = (val * 100).toFixed(1);
+                    document.getElementById(`weight${id}Val`).textContent = pct + '%';
+                    document.getElementById(`weight${id}Bar`).style.width = pct + '%';
+                };
+
+                updateWeight('Price', weights.price_prediction || 0.25);
+                updateWeight('Pattern', weights.pattern_recognition || 0.25);
+                updateWeight('Sentiment', weights.sentiment || 0.25);
+                updateWeight('Options', weights.options_flow || 0.25);
+
+                // 2. Fetch Accuracy History
+                const accRes = await fetch('/api/learning/accuracy?days=7');
+                const accData = await accRes.json();
+
+                if (accData.by_timeframe) {
+                    accData.by_timeframe.forEach(item => {
+                        const accId = `acc${item.check_after_mins}m`;
+                        const el = document.getElementById(accId);
+                        if (el) {
+                            el.textContent = (item.accuracy_pct || 0).toFixed(1) + '%';
+                            el.className = item.accuracy_pct >= 60 ? 'text-xl font-bold text-green-400' :
+                                item.accuracy_pct >= 50 ? 'text-xl font-bold text-blue-400' :
+                                    'text-xl font-bold text-yellow-400';
+                        }
+                    });
+                }
+
+            } catch (e) {
+                console.error('Learning Stats Error:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+            initChart();
+            generateSignal();
+            updateLearningStats();
+
+            setInterval(generateSignal, 30000);
+            setInterval(updateLearningStats, 60000); // Update learning stats every minute
+        });
+    </script>
+</body>
+
+</html>

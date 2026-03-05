@@ -1,0 +1,115 @@
+# Nifty Options Trading Toolkit Configuration
+# =========================================
+
+app:
+  name: "Nifty Options Trading Toolkit"
+  version: "1.0.0"
+  environment: "production"  # development, staging, production
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5000"
+
+# Database Configuration
+database:
+  type: "sqlite"
+  path: "data/trading.db"
+  backup_enabled: true
+  backup_interval_hours: 24
+
+# Market Data Configuration
+market_data:
+  source: "smartapi"
+  symbols:
+    - "NIFTY"
+    - "BANKNIFTY"
+  refresh_interval_seconds: 5
+  cache_ttl_seconds: 10
+
+# SmartAPI Configuration
+smartapi:
+  api_key: "${SMARTAPI_KEY}"
+  client_code: "${SMARTAPI_CLIENT_CODE}"
+  password: "${SMARTAPI_PASSWORD}"
+  totp_secret: "${SMARTAPI_TOTP_SECRET}"
+
+# Backtest Configuration
+backtest:
+  initial_capital: 100000
+  commission_rate: 0.001
+  slippage_rate: 0.0005
+  default_strategy: "ma_crossover"
+  param_grids:
+    ma_crossover:
+      short_ma: [10, 15, 20, 25]
+      long_ma: [30, 40, 50, 60]
+    rsi:
+      rsi_period: [10, 14, 21]
+      oversold: [25, 30, 35]
+      overbought: [65, 70, 75]
+
+# Walk-Forward Testing
+walk_forward:
+  enabled: true
+  in_sample_months: 12
+  out_of_sample_months: 3
+  step_months: 1
+
+# AI/ML Configuration
+ai:
+  enabled: true
+  confidence_threshold: 60
+  weights:
+    price_prediction: 0.25
+    pattern_recognition: 0.25
+    sentiment: 0.25
+    options_flow: 0.25
+  model_registry:
+    path: "models"
+    auto_save: true
+
+# Options Strategy Configuration
+options_strategy:
+  max_risk_per_trade_pct: 2.0
+  max_open_positions: 3
+  max_daily_loss_pct: 5.0
+  initial_capital: 200000
+  min_confidence: 60
+  min_adx: 20
+  volume_spike_multiplier: 1.5
+  target_pct: 40
+  stoploss_pct: 25
+
+# Paper Trading Configuration
+paper_trading:
+  enabled: true
+  initial_capital: 100000
+  latency_ms: 100
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/app.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  format: "json"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_interval_seconds: 30
+
+# WebSocket Configuration
+websocket:
+  enabled: true
+  reconnect: true
+  max_reconnect_attempts: 10
+  base_reconnect_delay_seconds: 1
+  max_reconnect_delay_seconds: 60
+  ping_interval_seconds: 30

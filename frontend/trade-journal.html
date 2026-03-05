@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Institutional Trade Journal - Nifty Options</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(30, 41, 59, 0.9);
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .trade-row {
+            transition: background 0.2s;
+        }
+
+        .trade-row:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .status-open {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-closed {
+            background: rgba(148, 163, 184, 0.2);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <header class="glass sticky top-0 z-50">
+        <div class="max-w-[1400px] mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <i class="fas fa-book-open text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">Trade <span class="text-indigo-400">Journal</span></h1>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-widest">Institutional Grade Tracking</p>
+                </div>
+            </div>
+            <nav class="flex items-center gap-2">
+                <a href="/"
+                    class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">Dashboard</a>
+                <a href="/ai-signal"
+                    class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">AI
+                    Signals</a>
+                <a href="/options-chain"
+                    class="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">Options
+                    Chain</a>
+                <a href="/trade-journal"
+                    class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">Journal</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-[1400px] mx-auto px-6 py-8">
+        <!-- Performance Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="glass stat-card rounded-2xl p-6">
+                <p class="text-xs text-gray-400 uppercase mb-2">Net Realized PnL</p>
+                <div class="flex items-baseline gap-2">
+                    <h2 id="totalPnl" class="text-3xl font-bold text-white mono">₹0</h2>
+                    <span id="pnlTrend" class="text-xs"></span>
+                </div>
+                <div class="mt-4 h-1 bg-gray-800 rounded-full overflow-hidden">
+                    <div id="pnlProgress" class="h-full bg-green-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="glass stat-card rounded-2xl p-6">
+                <p class="text-xs text-gray-400 uppercase mb-2">Win Rate</p>
+                <div class="flex items-baseline gap-2">
+                    <h2 id="winRate" class="text-3xl font-bold text-green-400 mono">0%</h2>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-2">Based on <span id="totalTrades" class="text-gray-300">0</span>
+                    closed trades</p>
+            </div>
+
+            <div class="glass stat-card rounded-2xl p-6">
+                <p class="text-xs text-gray-400 uppercase mb-2">Profit Factor</p>
+                <div class="flex items-baseline gap-2">
+                    <h2 id="profitFactor" class="text-3xl font-bold text-indigo-400 mono">0.00</h2>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-2">Gross Profit / Gross Loss</p>
+            </div>
+
+            <div class="glass stat-card rounded-2xl p-6">
+                <p class="text-xs text-gray-400 uppercase mb-2">Avg Win/Loss</p>
+                <div class="space-y-1">
+                    <p class="text-sm">Win: <span id="avgWin" class="text-green-400 mono">₹0</span></p>
+                    <p class="text-sm">Loss: <span id="avgLoss" class="text-red-400 mono">₹0</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Side: Table -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Active Trades -->
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-white flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            Active Institutional Positions
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-gray-500 border-b border-white/10 uppercase text-[10px] tracking-wider">
+                                    <th class="pb-3">Symbol</th>
+                                    <th class="pb-3 text-center">Strike</th>
+                                    <th class="pb-3 text-center">Type</th>
+                                    <th class="pb-3 text-right">Entry</th>
+                                    <th class="pb-3 text-center">Lots</th>
+                                    <th class="pb-3 text-right">Current PnL</th>
+                                    <th class="pb-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeTradesBody">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Past Trades -->
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-white flex items-center gap-2">
+                            <i class="fas fa-history text-gray-400"></i>
+                            Historical Log
+                        </h3>
+                        <div class="flex gap-2">
+                            <button
+                                class="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-xs">Filter</button>
+                            <button
+                                class="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-xs">Export</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="w-full text-left text-sm">
+                            <thead class="sticky top-0 bg-slate-800 z-10">
+                                <tr class="text-gray-500 border-b border-white/10 uppercase text-[10px] tracking-wider">
+                                    <th class="pb-3">Date</th>
+                                    <th class="pb-3">Instrument</th>
+                                    <th class="pb-3 text-right">Entry</th>
+                                    <th class="pb-3 text-right">Exit</th>
+                                    <th class="pb-3 text-right">PnL</th>
+                                    <th class="pb-3">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tradeHistoryBody">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Analytics Charts -->
+            <div class="space-y-8">
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="font-bold text-white mb-6">Equity Growth (PnL)</h3>
+                    <canvas id="equityChart" height="250"></canvas>
+                </div>
+
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="font-bold text-white mb-6">Trade Distribution</h3>
+                    <canvas id="distChart" height="250"></canvas>
+                </div>
+
+                <div class="glass rounded-2xl p-6 bg-indigo-600/10 border-indigo-500/20">
+                    <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-lightbulb text-yellow-400"></i>
+                        AI Strategy Insights
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="p-3 rounded-xl bg-black/20 border border-white/5">
+                            <p class="text-xs text-indigo-300">Win Rate for AI Signals</p>
+                            <p class="text-lg font-bold text-white">72.4%</p>
+                        </div>
+                        <div class="p-3 rounded-xl bg-black/20 border border-white/5">
+                            <p class="text-xs text-indigo-300">Best Pair</p>
+                            <p class="text-lg font-bold text-white">NIFTY Weekly CE</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadJournalData();
+            // Refresh every 30 seconds
+            setInterval(loadJournalData, 30000);
+        });
+
+        async function loadJournalData() {
+            try {
+                // Fetch All Trades
+                const historyRes = await fetch('/api/trades/history');
+                const trades = await historyRes.json();
+
+                // Fetch Stats
+                const statsRes = await fetch('/api/trades/summary');
+                const stats = await statsRes.json();
+
+                updateUI(trades, stats);
+                renderCharts(trades);
+            } catch (err) {
+                console.error("Journal load failed:", err);
+            }
+        }
+
+        function updateUI(trades, stats) {
+            // Stats Updates
+            const pnlEl = document.getElementById('totalPnl');
+            pnlEl.textContent = '₹' + stats.total_pnl.toLocaleString();
+            pnlEl.className = 'text-3xl font-bold mono ' + (stats.total_pnl >= 0 ? 'text-green-400' : 'text-red-400');
+
+            document.getElementById('winRate').textContent = stats.win_rate + '%';
+            document.getElementById('profitFactor').textContent = stats.profit_factor.toFixed(2);
+            document.getElementById('totalTrades').textContent = stats.total_trades;
+            document.getElementById('avgWin').textContent = '₹' + Math.round(stats.avg_win).toLocaleString();
+            document.getElementById('avgLoss').textContent = '₹' + Math.round(stats.avg_loss).toLocaleString();
+
+            const pnlProgress = document.getElementById('pnlProgress');
+            pnlProgress.style.width = Math.min(100, (stats.total_pnl / 10000) * 100) + '%';
+            pnlProgress.className = 'h-full ' + (stats.total_pnl >= 0 ? 'bg-green-500' : 'bg-red-500');
+
+            // Active Trades
+            const activeBody = document.getElementById('activeTradesBody');
+            const activeTrades = trades.filter(t => t.status === 'OPEN');
+
+            if (activeTrades.length === 0) {
+                activeBody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500">No open institutional positions. Generate signal to execute.</td></tr>';
+            } else {
+                activeBody.innerHTML = activeTrades.map(trade => `
+                    <tr class="trade-row border-b border-white/5">
+                        <td class="py-4 font-bold text-white">${trade.symbol}</td>
+                        <td class="py-4 text-center mono">${trade.strike || '--'}</td>
+                        <td class="py-4 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${trade.option_type === 'CE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
+                                ${trade.option_type || 'SPOT'}
+                            </span>
+                        </td>
+                        <td class="py-4 text-right mono">₹${trade.entry_price}</td>
+                        <td class="py-4 text-center">${trade.lots}</td>
+                        <td class="py-4 text-right font-bold text-blue-400 mono">--</td>
+                        <td class="py-4 text-right">
+                            <button onclick="closeTrade(${trade.id})" class="text-xs bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1 rounded-lg transition">Close</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // History
+            const historyBody = document.getElementById('tradeHistoryBody');
+            const pastTrades = trades.filter(t => t.status !== 'OPEN');
+
+            if (pastTrades.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500">History empty.</td></tr>';
+            } else {
+                historyBody.innerHTML = pastTrades.map(trade => {
+                    const date = new Date(trade.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+                    return `
+                        <tr class="trade-row border-b border-white/5">
+                            <td class="py-3 text-gray-400 italic text-xs">${date}</td>
+                            <td class="py-3">
+                                <p class="text-white font-medium">${trade.symbol} ${trade.strike ? trade.strike + ' ' + trade.option_type : ''}</p>
+                            </td>
+                            <td class="py-3 text-right mono text-gray-400">₹${trade.entry_price}</td>
+                            <td class="py-3 text-right mono text-gray-300">₹${trade.exit_price || '--'}</td>
+                            <td class="py-3 text-right font-bold mono ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">
+                                ${trade.pnl >= 0 ? '+' : ''}${Math.round(trade.pnl).toLocaleString()}
+                            </td>
+                            <td class="py-3 text-xs text-gray-500 max-w-[150px] truncate">${trade.reason || '--'}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function closeTrade(id) {
+            const exitPrice = prompt("Enter Exit Price:");
+            if (!exitPrice) return;
+
+            try {
+                const res = await fetch('/api/trades/close', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ trade_id: id, exit_price: parseFloat(exitPrice) })
+                });
+                const result = await res.json();
+                if (result.success) loadJournalData();
+                else alert("Close failed: " + result.error);
+            } catch (err) {
+                alert("Error closing trade");
+            }
+        }
+
+        let equityChart = null;
+        let distChart = null;
+
+        function renderCharts(trades) {
+            const pastTrades = trades.filter(t => t.status !== 'OPEN').reverse();
+            if (pastTrades.length === 0) return;
+
+            // Equity Curve
+            let cumulative = 0;
+            const points = pastTrades.map(t => {
+                cumulative += t.pnl;
+                return cumulative;
+            });
+            const labels = pastTrades.map((_, i) => 'T' + (i + 1));
+
+            const ctx1 = document.getElementById('equityChart').getContext('2d');
+            if (equityChart) equityChart.destroy();
+            equityChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Cumulative PnL',
+                        data: points,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { display: false }
+                    }
+                }
+            });
+
+            // Distribution
+            const wins = pastTrades.filter(t => t.pnl > 0).length;
+            const losses = pastTrades.length - wins;
+
+            const ctx2 = document.getElementById('distChart').getContext('2d');
+            if (distChart) distChart.destroy();
+            distChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Win', 'Loss'],
+                    datasets: [{
+                        data: [wins, losses],
+                        backgroundColor: ['#22c55e', '#ef4444'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

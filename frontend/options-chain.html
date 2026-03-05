@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Options Chain - Nifty Options</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pulse-green {
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+        }
+
+        .pulse-red {
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+
+        .heartbeat {
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+
+        @keyframes heartbeat {
+            0% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 1;
+                filter: drop-shadow(0 0 5px #8b5cf6);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 160px;
+            height: 80px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: #334155;
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+
+        .gauge-progress {
+            fill: none;
+            stroke: url(#pcr-gauge-gradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        .conf-label {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: white;
+        }
+
+        .row-atm {
+            background: linear-gradient(90deg, rgba(234, 179, 8, 0.15), rgba(234, 179, 8, 0.05), rgba(234, 179, 8, 0.15)) !important;
+            border-left: 3px solid #eab308 !important;
+        }
+
+        .row-itm-ce {
+            background: rgba(34, 197, 94, 0.08) !important;
+        }
+
+        .row-itm-pe {
+            background: rgba(239, 68, 68, 0.08) !important;
+        }
+
+        .row-otm {
+            background: rgba(30, 41, 59, 0.3) !important;
+        }
+
+        .oi-change-positive {
+            color: #22c55e !important;
+        }
+
+        .oi-change-negative {
+            color: #ef4444 !important;
+        }
+
+        .greek-delta {
+            color: #60a5fa;
+        }
+
+        .greek-gamma {
+            color: #a78bfa;
+        }
+
+        .greek-theta {
+            color: #fb923c;
+        }
+
+        .greek-vega {
+            color: #2dd4bf;
+        }
+
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .gauge-arc {
+            position: absolute;
+            width: 160px;
+            height: 80px;
+            border-radius: 80px 80px 0 0;
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+            opacity: 0.2;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <header class="glass sticky top-0 z-50">
+        <div class="max-w-[98vw] mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+                    <i class="fas fa-chart-line text-white text-sm"></i>
+                </div>
+                <h1 class="text-lg font-bold text-white">Nifty Options <span class="text-purple-400">Toolkit</span></h1>
+            </div>
+            <nav class="flex items-center gap-1">
+                <a href="/"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-home mr-1.5"></i>Dashboard
+                </a>
+                <a href="/options-strategy"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-bolt mr-1.5"></i>Options Pro
+                </a>
+                <a href="/ai-signal"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-robot mr-1.5"></i>AI Signal
+                </a>
+                <a href="/options-chain"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white flex items-center gap-2">
+                    <i class="fas fa-layer-group"></i>
+                    Options Chain
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-300 heartbeat"></span>
+                </a>
+                <a href="/trade-journal"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-book mr-1.5"></i>Journal
+                </a>
+                <a href="/backtest"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-history mr-1.5"></i>Backtest
+                </a>
+                <a href="/nifty-research"
+                    class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                    <i class="fas fa-microscope mr-1.5 text-blue-400"></i>Research Lab
+                </a>
+            </nav>
+            <div class="flex items-center gap-3">
+                <div id="globalSentimentPanel" class="glass rounded-lg px-3 py-2 flex items-center gap-2 hidden">
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">Global Sentiment</p>
+                        <div class="flex items-center gap-2">
+                            <span id="globalSentimentEmoji" class="text-lg">🌍</span>
+                            <span id="globalSentimentText" class="text-sm font-bold text-white">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">GIFT Nifty</p>
+                        <div class="flex items-center gap-1">
+                            <span id="giftNiftyChange" class="text-xs font-bold">--</span>
+                            <span id="giftNiftyPct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">S&P 500</p>
+                        <div class="flex items-center gap-1">
+                            <span id="sp500Change" class="text-xs font-bold">--</span>
+                            <span id="sp500Pct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 uppercase">Nasdaq</p>
+                        <div class="flex items-center gap-1">
+                            <span id="nasdaqChange" class="text-xs font-bold">--</span>
+                            <span id="nasdaqPct" class="text-[10px] text-gray-500">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end">
+                    <div class="flex items-center gap-2">
+                        <span id="connectionStatus" class="w-2 h-2 rounded-full bg-green-500 pulse-green"></span>
+                        <span class="text-sm text-gray-300 font-bold" id="livePriceHeader">₹0.00</span>
+                    </div>
+                    <span id="priceChangeOpen" class="text-[10px] font-medium text-gray-500">Wait for open...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-[98vw] mx-auto px-4 py-4">
+        <!-- Controls Bar -->
+        <div class="glass rounded-xl p-4 mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <label class="text-xs text-gray-400 uppercase block mb-1">Symbol</label>
+                        <select id="symbolSelect" onchange="loadOptionsChain()"
+                            class="bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="NIFTY">NIFTY 50</option>
+                            <option value="BANKNIFTY">BANKNIFTY</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 uppercase block mb-1">Expiry</label>
+                        <select id="expirySelect"
+                            class="bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="current">Current Week</option>
+                            <option value="next">Next Week</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="loadOptionsChain()"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition">
+                            <i class="fas fa-sync-alt mr-2"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400 uppercase">Last Update</p>
+                        <p id="lastUpdate" class="text-sm text-white mono">--:--:--</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-xs text-gray-400">Live</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Indicators -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <!-- PCR Gauge -->
+            <div class="glass rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-white"><i
+                            class="fas fa-balance-scale mr-2 text-blue-400"></i>PCR</h3>
+                    <span id="sentimentBadge"
+                        class="px-2 py-0.5 rounded text-xs font-bold bg-gray-600 text-white">--</span>
+                </div>
+                <div class="gauge-container">
+                    <svg viewBox="0 0 80 40" class="w-full">
+                        <defs>
+                            <linearGradient id="pcr-gauge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#22c55e" />
+                                <stop offset="50%" style="stop-color:#eab308" />
+                                <stop offset="100%" style="stop-color:#ef4444" />
+                            </linearGradient>
+                        </defs>
+                        <path class="gauge-bg" d="M 10 35 A 30 30 0 0 1 70 35" />
+                        <path id="pcrGauge" class="gauge-progress" d="M 10 35 A 30 30 0 0 1 70 35" />
+                    </svg>
+                    <div id="pcrValue" class="conf-label text-xl">--</div>
+                </div>
+                <p id="pcrLabel" class="text-xs text-gray-400 text-center mt-1">Put-Call Ratio</p>
+            </div>
+
+            <!-- Max Pain -->
+            <div class="glass rounded-xl p-4">
+                <h3 class="text-sm font-semibold text-white mb-3"><i
+                        class="fas fa-user-injured mr-2 text-red-400"></i>Max Pain</h3>
+                <div class="text-center">
+                    <p id="maxPainStrike" class="text-3xl font-bold text-white mono">--</p>
+                    <p class="text-xs text-gray-400 mt-1">Strike</p>
+                    <div class="mt-3 flex justify-center items-center gap-2">
+                        <span class="text-xs text-gray-500">Spot:</span>
+                        <span id="currentSpot" class="text-sm text-blue-400 mono">--</span>
+                    </div>
+                    <div class="mt-2 flex justify-center items-center gap-2">
+                        <span class="text-xs text-gray-500">Deviation:</span>
+                        <span id="painDeviation" class="text-sm mono">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total OI Comparison -->
+            <div class="glass rounded-xl p-4">
+                <h3 class="text-sm font-semibold text-white mb-3"><i
+                        class="fas fa-chart-bar mr-2 text-purple-400"></i>Total OI</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-green-400">CE OI</span>
+                        <span id="totalCeOi" class="text-sm text-white mono">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-red-400">PE OI</span>
+                        <span id="totalPeOi" class="text-sm text-white mono">--</span>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-green-400">Calls</span>
+                            <span class="text-red-400">Puts</span>
+                        </div>
+                        <div class="h-3 bg-gray-700 rounded-full overflow-hidden flex">
+                            <div id="ceOiBar" class="h-full bg-green-500 transition-all duration-500"
+                                style="width: 50%"></div>
+                            <div id="peOiBar" class="h-full bg-red-500 transition-all duration-500" style="width: 50%">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spot & Summary -->
+            <div class="glass rounded-xl p-4">
+                <h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-bolt mr-2 text-yellow-400"></i>Spot
+                </h3>
+                <div class="text-center">
+                    <p id="spotPrice" class="text-4xl font-bold text-white mono">--</p>
+                    <p id="spotChange" class="text-sm mt-1">--</p>
+                    <div class="mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-white/5 rounded p-2">
+                            <p class="text-gray-400">DTE</p>
+                            <p id="daysToExpiry" class="text-white font-bold">--</p>
+                        </div>
+                        <div class="bg-white/5 rounded p-2">
+                            <p class="text-gray-400">Strikes</p>
+                            <p id="strikesCount" class="text-white font-bold">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Options Chain Table -->
+        <div class="glass rounded-xl p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-white"><i
+                        class="fas fa-layer-group mr-2 text-blue-400"></i>Options Chain</h3>
+                <div class="flex items-center gap-4 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-yellow-500/50"></span>
+                        <span class="text-gray-400">ATM</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-green-500/30"></span>
+                        <span class="text-gray-400">ITM CE</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded bg-red-500/30"></span>
+                        <span class="text-gray-400">ITM PE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container rounded-lg overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="sticky-header bg-slate-800">
+                        <tr>
+                            <!-- CE Columns -->
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">OI Chg</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">OI</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">IV</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">Premium</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-delta">Delta</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-gamma">Gamma</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-theta">Theta</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-vega">Vega</th>
+
+                            <!-- Strike -->
+                            <th
+                                class="px-3 py-2 text-center text-white font-bold bg-slate-900 border-x border-slate-700">
+                                Strike</th>
+
+                            <!-- PE Columns -->
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-vega">Vega</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-theta">Theta</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-gamma">Gamma</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium greek-delta">Delta</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">Premium</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">IV</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">OI</th>
+                            <th class="px-2 py-2 text-center text-gray-400 font-medium">OI Chg</th>
+                        </tr>
+                    </thead>
+                    <tbody id="optionsChainBody" class="bg-slate-800/50">
+                        <tr>
+                            <td colspan="17" class="text-center py-8 text-gray-400">Loading options chain...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let socket = null;
+        let currentData = null;
+
+        async function connectWebSocket() {
+            socket = io();
+
+            socket.on('price_update', function (data) {
+                if (data.nifty) {
+                    const symbol = document.getElementById('symbolSelect').value;
+                    const price = symbol === 'NIFTY' ? data.nifty : data.banknifty;
+                    document.getElementById('livePriceHeader').textContent = '₹' + price.toLocaleString();
+
+                    if (data.day_open_nifty) {
+                        const open = data.day_open_nifty;
+                        const change = price - open;
+                        const pct = (change / open) * 100;
+                        const sign = change >= 0 ? '+' : '';
+                        const colorClass = change >= 0 ? 'text-green-400' : 'text-red-400';
+
+                        document.getElementById('priceChangeOpen').textContent = `${sign}${change.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
+                        document.getElementById('priceChangeOpen').className = `text-[10px] font-bold ${colorClass}`;
+                    }
+
+                    if (data.global_sentiment) {
+                        updateGlobalSentimentPanel(data.global_sentiment);
+                    }
+                }
+            });
+
+            socket.on('connect', function () {
+                document.getElementById('connectionStatus').className = 'w-2 h-2 rounded-full bg-green-500 pulse-green';
+            });
+        }
+
+        function updateGlobalSentimentPanel(data) {
+            document.getElementById('globalSentimentPanel').classList.remove('hidden');
+
+            if (data.sentiment) {
+                document.getElementById('globalSentimentText').textContent = data.sentiment;
+            }
+            if (data.gift_nifty) {
+                const change = data.gift_nifty.change || 0;
+                const sign = change >= 0 ? '+' : '';
+                document.getElementById('giftNiftyChange').textContent = sign + change.toFixed(0);
+                document.getElementById('giftNiftyChange').className = `text-xs font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            }
+            if (data.us_futures) {
+                if (data.us_futures.sp500) {
+                    const sp = data.us_futures.sp500;
+                    document.getElementById('sp500Change').textContent = (sp.change >= 0 ? '+' : '') + sp.change.toFixed(1);
+                    document.getElementById('sp500Change').className = `text-xs font-bold ${sp.change >= 0 ? 'text-green-400' : 'text-red-400'}`;
+                }
+                if (data.us_futures.nasdaq) {
+                    const nas = data.us_futures.nasdaq;
+                    document.getElementById('nasdaqChange').textContent = (nas.change >= 0 ? '+' : '') + nas.change.toFixed(1);
+                    document.getElementById('nasdaqChange').className = `text-xs font-bold ${nas.change >= 0 ? 'text-green-400' : 'text-red-400'}`;
+                }
+            }
+        }
+
+        async function loadOptionsChain() {
+            const symbol = document.getElementById('symbolSelect').value;
+            const expiry = document.getElementById('expirySelect').value;
+
+            try {
+                const response = await fetch(`/api/options-chain?symbol=${symbol}&expiry=${expiry}`);
+                const data = await response.json();
+                currentData = data;
+                renderOptionsChain(data);
+
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+                loadPCR();
+                loadMaxPain();
+            } catch (e) {
+                console.error('Error loading options chain:', e);
+            }
+        }
+
+        async function loadPCR() {
+            const symbol = document.getElementById('symbolSelect').value;
+
+            try {
+                const response = await fetch(`/api/options-chain/pcr?symbol=${symbol}`);
+                const data = await response.json();
+                renderPCR(data);
+            } catch (e) {
+                console.error('Error loading PCR:', e);
+            }
+        }
+
+        async function loadMaxPain() {
+            const symbol = document.getElementById('symbolSelect').value;
+
+            try {
+                const response = await fetch(`/api/options-chain/max-pain?symbol=${symbol}`);
+                const data = await response.json();
+                renderMaxPain(data);
+            } catch (e) {
+                console.error('Error loading max pain:', e);
+            }
+        }
+
+        function renderOptionsChain(data) {
+            const tbody = document.getElementById('optionsChainBody');
+            const chain = data.chain || [];
+            const spot = data.spot;
+
+            document.getElementById('spotPrice').textContent = '₹' + spot.toLocaleString();
+            document.getElementById('spotChange').textContent = 'Spot Price';
+            document.getElementById('daysToExpiry').textContent = data.days_to_expiry || '--';
+            document.getElementById('strikesCount').textContent = chain.length;
+            document.getElementById('currentSpot').textContent = '₹' + spot.toLocaleString();
+
+            const totalCeOi = data.total_ce_oi || 0;
+            const totalPeOi = data.total_pe_oi || 0;
+            document.getElementById('totalCeOi').textContent = formatNumber(totalCeOi);
+            document.getElementById('totalPeOi').textContent = formatNumber(totalPeOi);
+
+            const totalOi = totalCeOi + totalPeOi;
+            const cePercent = totalOi > 0 ? (totalCeOi / totalOi * 100) : 50;
+            const pePercent = totalOi > 0 ? (totalPeOi / totalOi * 100) : 50;
+
+            document.getElementById('ceOiBar').style.width = cePercent + '%';
+            document.getElementById('peOiBar').style.width = pePercent + '%';
+
+            const html = chain.map(row => {
+                const isATM = row.strike === Math.round(spot / 50) * 50;
+                const isITMCE = row.strike < spot;
+                const isITMPE = row.strike > spot;
+
+                let rowClass = 'border-b border-slate-700/50 hover:bg-slate-700/30 transition';
+                if (isATM) rowClass += ' row-atm';
+                else if (isITMCE) rowClass += ' row-itm-ce';
+                else if (isITMPE) rowClass += ' row-itm-pe';
+                else rowClass += ' row-otm';
+
+                return `
+                    <tr class="${rowClass}">
+                        <td class="px-2 py-2 text-center ${row.ce_oi_change >= 0 ? 'oi-change-positive' : 'oi-change-negative'} mono">${formatOiChange(row.ce_oi_change)}</td>
+                        <td class="px-2 py-2 text-center text-white mono">${formatNumber(row.ce_oi)}</td>
+                        <td class="px-2 py-2 text-center text-yellow-400 mono">${row.ce_iv.toFixed(2)}%</td>
+                        <td class="px-2 py-2 text-center text-green-400 mono font-medium">${row.ce_premium.toFixed(2)}</td>
+                        <td class="px-2 py-2 text-center greek-delta mono">${row.ce_delta.toFixed(3)}</td>
+                        <td class="px-2 py-2 text-center greek-gamma mono">${row.ce_gamma.toFixed(4)}</td>
+                        <td class="px-2 py-2 text-center greek-theta mono">${row.ce_theta.toFixed(2)}</td>
+                        <td class="px-2 py-2 text-center greek-vega mono">${row.ce_vega.toFixed(2)}</td>
+                        
+                        <td class="px-3 py-2 text-center text-white font-bold bg-slate-900/80 border-x border-slate-700 mono">${row.strike.toLocaleString()}</td>
+                        
+                        <td class="px-2 py-2 text-center greek-vega mono">${row.pe_vega.toFixed(2)}</td>
+                        <td class="px-2 py-2 text-center greek-theta mono">${row.pe_theta.toFixed(2)}</td>
+                        <td class="px-2 py-2 text-center greek-gamma mono">${row.pe_gamma.toFixed(4)}</td>
+                        <td class="px-2 py-2 text-center greek-delta mono">${row.pe_delta.toFixed(3)}</td>
+                        <td class="px-2 py-2 text-center text-red-400 mono font-medium">${row.pe_premium.toFixed(2)}</td>
+                        <td class="px-2 py-2 text-center text-yellow-400 mono">${row.pe_iv.toFixed(2)}%</td>
+                        <td class="px-2 py-2 text-center text-white mono">${formatNumber(row.pe_oi)}</td>
+                        <td class="px-2 py-2 text-center ${row.pe_oi_change >= 0 ? 'oi-change-positive' : 'oi-change-negative'} mono">${formatOiChange(row.pe_oi_change)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.innerHTML = html;
+        }
+
+        function renderPCR(data) {
+            const pcr = data.pcr || 1;
+            const sentiment = data.sentiment || 'NEUTRAL';
+
+            document.getElementById('pcrValue').textContent = pcr.toFixed(2);
+
+            const gauge = document.getElementById('pcrGauge');
+            const normalizedPcr = Math.min(Math.max(pcr, 0.3), 1.7);
+            const offset = 188.5 - (188.5 * ((normalizedPcr - 0.3) / 1.4));
+            gauge.style.strokeDashoffset = offset;
+
+            const badge = document.getElementById('sentimentBadge');
+            badge.textContent = sentiment.replace('_', ' ');
+
+            if (sentiment.includes('BULLISH')) {
+                badge.className = 'px-2 py-0.5 rounded text-xs font-bold bg-green-600 text-white';
+                document.getElementById('pcrValue').className = 'conf-label text-xl text-green-400';
+            } else if (sentiment.includes('BEARISH')) {
+                badge.className = 'px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white';
+                document.getElementById('pcrValue').className = 'conf-label text-xl text-red-400';
+            } else {
+                badge.className = 'px-2 py-0.5 rounded text-xs font-bold bg-yellow-600 text-white';
+                document.getElementById('pcrValue').className = 'conf-label text-xl text-yellow-400';
+            }
+        }
+
+        function renderMaxPain(data) {
+            const maxPainStrike = data.max_pain_strike || 0;
+            const currentSpot = data.current_spot || 0;
+
+            document.getElementById('maxPainStrike').textContent = maxPainStrike.toLocaleString();
+
+            const deviation = ((maxPainStrike - currentSpot) / currentSpot * 100);
+            const deviationEl = document.getElementById('painDeviation');
+            deviationEl.textContent = (deviation >= 0 ? '+' : '') + deviation.toFixed(2) + '%';
+            deviationEl.className = `text-sm mono ${deviation >= 0 ? 'text-green-400' : 'text-red-400'}`;
+        }
+
+        function formatNumber(num) {
+            if (num >= 10000000) {
+                return (num / 10000000).toFixed(2) + ' Cr';
+            } else if (num >= 100000) {
+                return (num / 100000).toFixed(2) + ' L';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + ' K';
+            }
+            return num.toString();
+        }
+
+        function formatOiChange(num) {
+            if (num >= 0) {
+                return '+' + formatNumber(Math.abs(num));
+            }
+            return '-' + formatNumber(Math.abs(num));
+        }
+
+        // Auto-refresh every 5 seconds
+        setInterval(() => {
+            loadOptionsChain();
+        }, 5000);
+
+        // Initial load
+        connectWebSocket();
+        loadOptionsChain();
+    </script>
+</body>
+
+</html>

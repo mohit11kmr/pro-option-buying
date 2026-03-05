@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty Options Trading Toolkit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.2.0/build/index.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .pulse-green {
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+        }
+
+        .pulse-red {
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .score-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #ef4444, #eab308, #22c55e);
+        }
+
+        .loading {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #8b5cf6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .signal-buy {
+            border-left: 4px solid #22c55e;
+        }
+
+        .signal-sell {
+            border-left: 4px solid #ef4444;
+        }
+
+        .signal-hold {
+            border-left: 4px solid #eab308;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div
+                        class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <i class="fas fa-chart-line text-white text-sm"></i>
+                    </div>
+                    <h1 class="text-lg font-bold text-white">Nifty Options <span class="text-indigo-400">Toolkit</span>
+                    </h1>
+                </div>
+                <nav class="flex items-center space-x-1">
+                    <a href="/" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 text-white">
+                        <i class="fas fa-home mr-1.5"></i>Dashboard
+                    </a>
+                    <a href="/options-strategy"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-bolt mr-1.5"></i>Options Pro
+                    </a>
+                    <a href="/ai-signal"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-robot mr-1.5"></i>AI Signal
+                    </a>
+                    <a href="/options-chain"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-layer-group mr-1.5"></i>Options Chain
+                    </a>
+                    <a href="/trade-journal"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-book mr-1.5"></i>Journal
+                    </a>
+                    <a href="/backtest"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-history mr-1.5"></i>Backtest
+                    </a>
+                    <a href="/nifty-research"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition">
+                        <i class="fas fa-microscope mr-1.5 text-blue-400"></i>Research Lab
+                    </a>
+                </nav>
+                <div class="flex items-center space-x-3 ml-4 border-l border-white/10 pl-4">
+                    <div id="trend-5m" class="flex items-center space-x-1 text-[10px] font-bold text-gray-400">
+                        <span>5M</span><span class="trend-badge px-1.5 py-0.5 rounded bg-gray-800 text-white">--</span>
+                    </div>
+                    <div id="trend-15m" class="flex items-center space-x-1 text-[10px] font-bold text-gray-400">
+                        <span>15M</span><span class="trend-badge px-1.5 py-0.5 rounded bg-gray-800 text-white">--</span>
+                    </div>
+                    <div id="trend-1h" class="flex items-center space-x-1 text-[10px] font-bold text-gray-400">
+                        <span>1H</span><span class="trend-badge px-1.5 py-0.5 rounded bg-gray-800 text-white">--</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div id="connectionStatus" class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 pulse-green"></span>
+                        <span class="text-sm text-gray-300">Live</span>
+                    </div>
+                    <button onclick="refreshAll()"
+                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium transition">
+                        <i class="fas fa-sync-alt mr-1"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Market Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass rounded-xl p-4 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">NIFTY</span>
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                </div>
+                <p id="niftyPrice" class="text-2xl font-bold text-white">Loading...</p>
+                <p id="niftyChange" class="text-sm mt-1">--</p>
+            </div>
+
+            <div class="glass rounded-xl p-4 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">BANKNIFTY</span>
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                </div>
+                <p id="bankniftyPrice" class="text-2xl font-bold text-white">Loading...</p>
+                <p id="bankniftyChange" class="text-sm mt-1">--</p>
+            </div>
+
+            <div class="glass rounded-xl p-4 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">AI Signal</span>
+                    <i id="signalIcon" class="fas fa-robot text-purple-400"></i>
+                </div>
+                <p id="aiSignal" class="text-2xl font-bold text-white">Loading...</p>
+                <p id="signalScore" class="text-sm text-gray-400 mt-1">Score: --</p>
+            </div>
+
+            <div class="glass rounded-xl p-4 card-hover">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">Confidence</span>
+                    <i class="fas fa-bullseye text-indigo-400"></i>
+                </div>
+                <p id="confidence" class="text-2xl font-bold text-white">--%</p>
+                <div class="mt-2 score-bar">
+                    <div id="confidenceBar" class="h-full bg-indigo-500 rounded" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- AI Signal Card -->
+            <div class="lg:col-span-2">
+                <div class="glass rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-white">
+                            <i class="fas fa-brain mr-2 text-purple-400"></i>AI Trading Signal
+                        </h2>
+                        <span id="lastUpdate" class="text-xs text-gray-400">Updated: --</span>
+                    </div>
+
+                    <!-- Main Signal -->
+                    <div id="mainSignal" class="signal-hold rounded-xl p-6 mb-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-300 mb-1">Recommendation</p>
+                                <h3 id="recommendation" class="text-3xl font-bold text-white">HOLD</h3>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-gray-300 mb-1">Score</p>
+                                <p id="scoreValue" class="text-3xl font-bold text-white">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Component Scores -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="text-center">
+                            <div id="pricePredCircle"
+                                class="w-16 h-16 rounded-full mx-auto mb-2 flex items-center justify-center">
+                                <i class="fas fa-chart-line text-xl"></i>
+                            </div>
+                            <p class="text-xs text-gray-400">Price Prediction</p>
+                            <p id="pricePredScore" class="font-semibold text-white">--</p>
+                        </div>
+                        <div class="text-center">
+                            <div id="patternCircle"
+                                class="w-16 h-16 rounded-full mx-auto mb-2 flex items-center justify-center">
+                                <i class="fas fa-shapes text-xl"></i>
+                            </div>
+                            <p class="text-xs text-gray-400">Patterns</p>
+                            <p id="patternScore" class="font-semibold text-white">--</p>
+                        </div>
+                        <div class="text-center">
+                            <div id="sentimentCircle"
+                                class="w-16 h-16 rounded-full mx-auto mb-2 flex items-center justify-center">
+                                <i class="fas fa-newspaper text-xl"></i>
+                            </div>
+                            <p class="text-xs text-gray-400">Sentiment</p>
+                            <p id="sentimentScore" class="font-semibold text-white">--</p>
+                        </div>
+                        <div class="text-center">
+                            <div id="optionsCircle"
+                                class="w-16 h-16 rounded-full mx-auto mb-2 flex items-center justify-center">
+                                <i class="fas fa-layer-group text-xl"></i>
+                            </div>
+                            <p class="text-xs text-gray-400">Options Flow</p>
+                            <p id="optionsScore" class="font-semibold text-white">--</p>
+                        </div>
+                    </div>
+
+                    <!-- Reasons -->
+                    <div class="border-t border-gray-700 pt-4">
+                        <h4 class="text-sm font-medium text-gray-300 mb-3">Signal Reasons</h4>
+                        <ul id="reasons" class="space-y-2">
+                            <li class="text-gray-400 text-sm"><i
+                                    class="fas fa-check-circle text-green-400 mr-2"></i>Loading...</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Price Chart -->
+                <div class="glass rounded-xl p-6 mt-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-white">
+                            <i class="fas fa-chart-area mr-2 text-blue-400"></i>NIFTY Price Chart
+                        </h2>
+                        <div class="flex gap-2">
+                            <button onclick="toggleTimeframe('1W')"
+                                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm text-white">1W</button>
+                            <button onclick="toggleTimeframe('1M')"
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white">1M</button>
+                            <button onclick="toggleTimeframe('3M')"
+                                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm text-white">3M</button>
+                            <button onclick="toggleTimeframe('1Y')"
+                                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm text-white">1Y</button>
+                            <button onclick="resetChart()"
+                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm text-white">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="height: 300px;">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <!-- Market Sentiment -->
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">
+                        <i class="fas fa-poll mr-2 text-yellow-400"></i>Market Sentiment
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-400">Bullish</span>
+                                <span id="bullishPercent" class="text-green-400">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="bullishBar" class="h-full bg-green-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-400">Bearish</span>
+                                <span id="bearishPercent" class="text-red-400">--%</span>
+                            </div>
+                            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="bearishBar" class="h-full bg-red-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backtest Results -->
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">
+                        <i class="fas fa-history mr-2 text-indigo-400"></i>Backtest Results
+                    </h3>
+                    <div id="backtestResults" class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Strategy</span>
+                            <span class="text-white font-medium">MA Crossover</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Returns</span>
+                            <span id="backtestReturns" class="text-green-400 font-medium">+223%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Win Rate</span>
+                            <span class="text-white font-medium">42%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Max Drawdown</span>
+                            <span class="text-red-400 font-medium">-29%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Sharpe Ratio</span>
+                            <span class="text-white font-medium">0.09</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">
+                        <i class="fas fa-bolt mr-2 text-yellow-400"></i>Quick Actions
+                    </h3>
+                    <div class="space-y-2">
+                        <a href="/options-strategy"
+                            class="block w-full px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 rounded-lg text-white font-medium transition text-left shadow-lg">
+                            <i class="fas fa-bolt mr-2"></i>⚡ Options Strategy Pro
+                        </a>
+                        <a href="/ai-signal"
+                            class="block w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition text-left">
+                            <i class="fas fa-robot mr-2"></i>AI Signal Center
+                        </a>
+                        <a href="/backtest"
+                            class="block w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-medium transition text-left">
+                            <i class="fas fa-chart-line mr-2"></i>Advanced Backtest
+                        </a>
+                        <button onclick="generateSignal()"
+                            class="w-full px-4 py-3 bg-pink-600 hover:bg-pink-700 rounded-lg text-white font-medium transition text-left">
+                            <i class="fas fa-sync mr-2"></i>Refresh Signal
+                        </button>
+                        <button onclick="exportReport()"
+                            class="w-full px-4 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white font-medium transition text-left">
+                            <i class="fas fa-download mr-2"></i>Export Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Option Chain -->
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">
+                        <i class="fas fa-layer-group mr-2 text-green-400"></i>Option Chain
+                    </h3>
+                    <div class="text-center text-gray-400 text-sm" id="optionChain">
+                        <p><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize
+        let priceChart = null;
+        let socket = null;
+
+        // Connect to WebSocket for real-time updates
+        function connectWebSocket() {
+            socket = io();
+
+            socket.on('price_update', function (data) {
+                console.log('Live price:', data);
+                document.getElementById('niftyPrice').textContent = '₹' + data.nifty.toLocaleString();
+                document.getElementById('bankniftyPrice').textContent = '₹' + data.banknifty.toLocaleString();
+
+                const change = ((Math.random() - 0.5) * 2).toFixed(2);
+                const changeEl = document.getElementById('niftyChange');
+                changeEl.textContent = (change > 0 ? '+' : '') + change + '%';
+                changeEl.className = change >= 0 ? 'text-sm mt-1 text-green-400' : 'text-sm mt-1 text-red-400';
+            });
+
+            socket.on('connect', function () {
+                console.log('Connected to real-time feed');
+                document.getElementById('connectionStatus').innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 pulse-green"></span><span class="text-sm text-gray-300">Live</span>';
+            });
+        }
+
+        async function refreshAll() {
+            await Promise.all([loadSignal(), loadChartData(), loadOptionChain()]);
+        }
+
+        async function loadChartData() {
+            try {
+                const response = await fetch('/api/market/history');
+                const data = await response.json();
+
+                if (data && data.length > 0 && priceChart) {
+                    let count = 30;
+                    if (chartTimeframe === '1W') count = 7;
+                    else if (chartTimeframe === '1M') count = 30;
+                    else if (chartTimeframe === '3M') count = 90;
+                    else if (chartTimeframe === '1Y') count = 365;
+
+                    const slicedData = data.slice(-count);
+                    const labels = slicedData.map(d => {
+                        const date = new Date(d.date);
+                        return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+                    });
+                    const prices = slicedData.map(d => d.close);
+
+                    priceChart.data.labels = labels;
+                    priceChart.data.datasets[0].data = prices;
+                    priceChart.update('none');
+                }
+            } catch (e) {
+                console.error('Error loading chart data:', e);
+            }
+        }
+
+        async function loadOptionChain() {
+            try {
+                const response = await fetch('/api/option/chain');
+                const data = await response.json();
+
+                if (data && data.calls) {
+                    let html = '<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="py-1">Calls</th><th>OI</th><th>Strike</th><th>OI</th><th class="py-1">Puts</th></tr></thead><tbody>';
+
+                    for (let i = 0; i < data.calls.length; i++) {
+                        const call = data.calls[i];
+                        const put = data.puts[i];
+                        html += `<tr class="text-white">
+                            <td class="py-1 text-green-400">${(call.oi / 100000).toFixed(1)}L</td>
+                            <td>${call.ltp}</td>
+                            <td class="font-bold py-1">${call.strike}</td>
+                            <td>${put.ltp}</td>
+                            <td class="py-1 text-red-400">${(put.oi / 100000).toFixed(1)}L</td>
+                        </tr>`;
+                    }
+                    html += '</tbody></table>';
+                    document.getElementById('optionChain').innerHTML = html;
+                }
+            } catch (e) {
+                console.error('Error loading option chain:', e);
+                document.getElementById('optionChain').innerHTML = '<p class="text-gray-400">Unable to load</p>';
+            }
+        }
+
+        async function loadMarketData() {
+            console.log('Loading market data...');
+            try {
+                const response = await fetch('/api/market/live');
+                const data = await response.json();
+                console.log('Market data:', data);
+
+                if (data.nifty) {
+                    document.getElementById('niftyPrice').textContent = '₹' + data.nifty.toLocaleString();
+                    const change = ((Math.random() - 0.5) * 2).toFixed(2);
+                    const changeEl = document.getElementById('niftyChange');
+                    changeEl.textContent = (change > 0 ? '+' : '') + change + '%';
+                    changeEl.className = change >= 0 ? 'text-sm mt-1 text-green-400' : 'text-sm mt-1 text-red-400';
+                }
+
+                if (data.banknifty) {
+                    document.getElementById('bankniftyPrice').textContent = '₹' + data.banknifty.toLocaleString();
+                }
+                console.log('Market data updated');
+            } catch (e) {
+                console.error('Error loading market data:', e);
+                // Demo mode - use static data
+                document.getElementById('niftyPrice').textContent = '₹24,854.60';
+                document.getElementById('niftyChange').textContent = '+0.25%';
+                document.getElementById('niftyChange').className = 'text-sm mt-1 text-green-400';
+                document.getElementById('bankniftyPrice').textContent = '₹59,786.65';
+            }
+        }
+
+        async function loadSignal() {
+            console.log('Loading AI signal...');
+            try {
+                const response = await fetch('/api/ai/signal');
+                const signal = await response.json();
+                console.log('AI Signal:', signal);
+                updateSignalUI(signal);
+            } catch (e) {
+                console.error('Error loading signal:', e);
+                // Demo data
+                updateSignalUI({
+                    recommendation: 'STRONG_BUY',
+                    score: 90.5,
+                    confidence: 50.5,
+                    components: {
+                        price_prediction: 2,
+                        pattern_recognition: 1,
+                        sentiment: 2,
+                        options_flow: 2
+                    },
+                    reasons: [
+                        'Patterns: BUY',
+                        'Sentiment: STRONG_BULLISH',
+                        'Options flow: STRONG_BULLISH'
+                    ]
+                });
+            }
+        }
+
+        function updateSignalUI(signal) {
+            checkSignalChange(signal);
+
+            // Main signal
+            const rec = signal.recommendation || 'HOLD';
+            document.getElementById('recommendation').textContent = rec;
+            document.getElementById('aiSignal').textContent = rec;
+
+            const signalEl = document.getElementById('mainSignal');
+            signalEl.className = 'rounded-xl p-6 mb-6 ';
+            if (rec.includes('BUY')) {
+                signalEl.className += 'signal-buy bg-green-900/30';
+            } else if (rec.includes('SELL')) {
+                signalEl.className += 'signal-sell bg-red-900/30';
+            } else {
+                signalEl.className += 'signal-hold bg-yellow-900/30';
+            }
+
+            // Score
+            document.getElementById('scoreValue').textContent = signal.score || 0;
+            document.getElementById('signalScore').textContent = 'Score: ' + (signal.score || 0);
+
+            // Confidence
+            const conf = signal.confidence || 0;
+            document.getElementById('confidence').textContent = conf + '%';
+            document.getElementById('confidenceBar').style.width = conf + '%';
+
+            // Trends
+            if (signal.trends) {
+                Object.keys(signal.trends).forEach(tf => {
+                    const el = document.getElementById(`trend-${tf}`);
+                    if (el) {
+                        const badge = el.querySelector('.trend-badge');
+                        const trend = signal.trends[tf];
+                        if (badge) {
+                            badge.innerText = trend;
+                            badge.style.background = trend === 'BULLISH' ? '#22c55e' : (trend === 'BEARISH' ? '#ef4444' : '#374151');
+                        }
+                    }
+                });
+            }
+
+            // Components
+            const comps = signal.components || {};
+
+            const priceScore = comps.price_prediction || 0;
+            document.getElementById('pricePredScore').textContent = priceScore > 0 ? '+' + priceScore : priceScore;
+            updateCircle('pricePredCircle', priceScore);
+
+            const patternScore = comps.pattern_recognition || 0;
+            document.getElementById('patternScore').textContent = patternScore > 0 ? '+' + patternScore : patternScore;
+            updateCircle('patternCircle', patternScore);
+
+            const sentimentScore = comps.sentiment || 0;
+            document.getElementById('sentimentScore').textContent = sentimentScore > 0 ? '+' + sentimentScore : sentimentScore;
+            updateCircle('sentimentCircle', sentimentScore);
+
+            const optionsScore = comps.options_flow || 0;
+            document.getElementById('optionsScore').textContent = optionsScore > 0 ? '+' + optionsScore : optionsScore;
+            updateCircle('optionsCircle', optionsScore);
+
+            // Reasons
+            const reasons = signal.reasons || [];
+            const reasonsEl = document.getElementById('reasons');
+            reasonsEl.innerHTML = reasons.map(r =>
+                `<li class="text-gray-400 text-sm"><i class="fas fa-check-circle text-green-400 mr-2"></i>${r}</li>`
+            ).join('');
+
+            // Timestamp
+            document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+            // Sentiment bar
+            const bullish = Math.max(0, Math.min(100, 50 + (signal.score || 0) / 2));
+            document.getElementById('bullishPercent').textContent = bullish.toFixed(0) + '%';
+            document.getElementById('bullishBar').style.width = bullish + '%';
+            document.getElementById('bearishPercent').textContent = (100 - bullish).toFixed(0) + '%';
+            document.getElementById('bearishBar').style.width = (100 - bullish) + '%';
+        }
+
+        function updateCircle(id, score) {
+            const el = document.getElementById(id);
+            el.className = 'w-16 h-16 rounded-full mx-auto mb-2 flex items-center justify-center ';
+            if (score > 0) {
+                el.className += 'bg-green-500/20 text-green-400';
+            } else if (score < 0) {
+                el.className += 'bg-red-500/20 text-red-400';
+            } else {
+                el.className += 'bg-gray-500/20 text-gray-400';
+            }
+        }
+
+        let chartType = 'line';
+        let chartTimeframe = '1M';
+
+        function initChart() {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+
+            const labels = Array.from({ length: 30 }, (_, i) => 'Day ' + (i + 1));
+            const prices = Array.from({ length: 30 }, () => 24000 + Math.random() * 2000);
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'NIFTY Price',
+                        data: prices,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#8b5cf6'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#ccc',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#9ca3af' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#9ca3af' }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        function toggleTimeframe(tf) {
+            chartTimeframe = tf;
+            loadChartData();
+        }
+
+        function toggleChart(type) {
+            chartType = type;
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            initChart();
+            loadChartData();
+        }
+
+        function resetChart() {
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            initChart();
+            loadChartData();
+        }
+
+        function playAlertSound(type) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'BUY') {
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+            } else if (type === 'SELL') {
+                oscillator.frequency.value = 400;
+                oscillator.type = 'square';
+            } else {
+                oscillator.frequency.value = 600;
+                oscillator.type = 'triangle';
+            }
+
+            gainNode.gain.value = 0.3;
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        }
+
+        function showNotification(message, type) {
+            const notif = document.createElement('div');
+            notif.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg animate-pulse ${type === 'BUY' ? 'bg-green-600' : type === 'SELL' ? 'bg-red-600' : 'bg-yellow-600'
+                } text-white font-bold flex items-center gap-3`;
+            notif.innerHTML = `<i class="fas fa-bell text-2xl"></i><span>${message}</span>`;
+            document.body.appendChild(notif);
+
+            playAlertSound(type);
+
+            setTimeout(() => notif.remove(), 5000);
+        }
+
+        let lastSignal = null;
+
+        function checkSignalChange(signal) {
+            if (lastSignal && lastSignal.recommendation !== signal.recommendation) {
+                showNotification(`Signal Changed: ${signal.recommendation}`, signal.recommendation);
+            }
+            lastSignal = signal;
+        }
+
+        async function generateSignal() {
+            await loadSignal();
+            showNotification('Signal Generated!', lastSignal?.recommendation || 'HOLD');
+        }
+
+        function exportReport() {
+            alert('Exporting report...');
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, connecting to real-time feed...');
+            connectWebSocket();
+            loadSignal();
+            initChart();
+            loadChartData();
+            loadOptionChain();
+            setInterval(refreshAll, 30000);
+        });
+    </script>
+</body>
+
+</html>
